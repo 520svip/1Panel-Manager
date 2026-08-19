@@ -93,6 +93,16 @@ const state = reactive({
     autoRefresh: true,
     interval: 3,
     lastUpdate: null,
+    activeTab: 'home', // home | apps
+    stats: null,
+    apps: [],
+    appsLoading: false,
+    appOps: {},
+    appSearch: '',
+    upgradeApp: null,
+    upgradeVersions: [],
+    upgradeIndex: 0,
+    upgradeLoading: false,
   },
   list: {
     autoRefresh: true,
@@ -196,6 +206,9 @@ function gotoMonitor(id) {
   state.view = 'monitor';
   location.hash = '#/monitor/' + id;
   state.monitor.data = null;
+  state.monitor.stats = null;
+  state.monitor.apps = [];
+  state.monitor.activeTab = 'home';
   fetchMonitor();
 }
 
@@ -321,10 +334,28 @@ async function doLogin() {
     localStorage.setItem('pm_token', data.token);
     state.loggedIn = true;
     loginPassword.value = '';
+    // 根据当前 URL hash 恢复视图（可能直接访问 #/monitor/13）
+    routeHash();
     loadPanels();
     loadUiSettings();
   } catch (e) {
     toast(e.message, 'error');
+  }
+}
+
+// 根据 URL hash 路由到对应视图
+function routeHash() {
+  const m = location.hash.match(/^#\/monitor\/(\d+)/);
+  if (m) {
+    state.monitorId = Number(m[1]);
+    state.view = 'monitor';
+    state.monitor.data = null;
+    state.monitor.stats = null;
+    state.monitor.apps = [];
+    state.monitor.activeTab = 'home';
+    fetchMonitor();
+  } else {
+    state.view = 'list';
   }
 }
 
@@ -417,6 +448,7 @@ async function fetchMonitor() {
     const data = await api(`/api/panels/${id}/monitor`);
     data.series = normalizeHistory(data.history);
     state.monitor.data = data;
+    if (data.stats) state.monitor.stats = data.stats;
     state.monitor.lastUpdate = new Date();
   } catch (e) {
     state.monitor.data = state.monitor.data || null;
@@ -425,6 +457,134 @@ async function fetchMonitor() {
     state.monitor.loading = false;
   }
 }
+
+// 已安装应用列表（应用商店）
+async function fetchApps() {
+  const id = state.monitorId;
+  if (!id) return;
+  if (state.monitor.appsLoading) return;
+  state.monitor.appsLoading = true;
+  try {
+    const token = localStorage.getItem('pm_token') || '';
+    const apps = await api(`/api/panels/${id}/apps`) || [];
+    // <img> 无法带 Authorization 头，把会话 token 拼到图标 URL 上
+    state.monitor.apps = apps.map((a) => {
+      if (a.iconUrl && token) a.iconUrl += (a.iconUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+      return a;
+    });
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    state.monitor.appsLoading = false;
+  }
+}
+
+// 操作应用：start / stop / restart / uninstall
+async function operateApp(app, operate) {
+  const labels = { start: '启动', stop: '停止', restart: '重启', uninstall: '卸载' };
+  const label = labels[operate] || operate;
+  if (operate === 'uninstall') {
+    if (!confirm(`确定要卸载应用「${app.name}」吗？\n该操作会移除应用及其容器，请谨慎！`)) return;
+  } else if (!confirm(`确定要对「${app.name}」执行「${label}」操作吗？`)) {
+    return;
+  }
+  const key = app.id;
+  if (state.monitor.appOps[key]) return;
+  state.monitor.appOps[key] = true;
+  try {
+    const extra = operate === 'uninstall' ? { forceDelete: true } : undefined;
+    const r = await api(`/api/panels/${state.monitorId}/apps/${app.id}/op`, {
+      method: 'POST',
+      body: { operate, ...(extra || {}) },
+    });
+    toast(r && r.message ? r.message : `「${label}」操作已下发`, 'success');
+    // 稍等片刻再刷新列表，让状态有时间更新
+    setTimeout(fetchApps, 1500);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    state.monitor.appOps[key] = false;
+  }
+}
+
+// 同步应用商店
+async function syncApps() {
+  try {
+    const r = await api(`/api/panels/${state.monitorId}/apps/sync`, { method: 'POST' });
+    toast(r && r.message ? r.message : '已触发应用商店同步', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// 打开升级弹窗（优先使用"检查更新"时已缓存的版本列表）
+async function openUpgrade(app) {
+  state.monitor.upgradeApp = app;
+  state.monitor.upgradeIndex = 0;
+  if (app.updateVersions && app.updateVersions.length) {
+    state.monitor.upgradeVersions = app.updateVersions;
+    state.monitor.upgradeLoading = false;
+    return;
+  }
+  state.monitor.upgradeVersions = [];
+  state.monitor.upgradeLoading = true;
+  try {
+    const versions = await api(`/api/panels/${state.monitorId}/apps/${app.id}/versions`);
+    state.monitor.upgradeVersions = versions || [];
+  } catch (e) {
+    toast(e.message, 'error');
+    state.monitor.upgradeApp = null;
+  } finally {
+    state.monitor.upgradeLoading = false;
+  }
+}
+
+// 执行升级
+async function doUpgrade(app, version) {
+  if (!confirm(`确定将「${app.name}」升级到 ${version.version} 吗？`)) return;
+  const key = app.id;
+  if (state.monitor.appOps[key]) return;
+  state.monitor.appOps[key] = true;
+  try {
+    const r = await api(`/api/panels/${state.monitorId}/apps/${app.id}/op`, {
+      method: 'POST',
+      body: {
+        operate: 'upgrade',
+        detailId: version.detailId,
+        version: version.version,
+        dockerCompose: version.dockerCompose || '',
+        backup: true,
+        pullImage: true,
+        deleteImage: true,
+      },
+    });
+    toast(r && r.message ? r.message : '升级已下发', 'success');
+    state.monitor.upgradeApp = null;
+    setTimeout(fetchApps, 1500);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    state.monitor.appOps[key] = false;
+  }
+}
+
+// 应用状态文案
+function appStatusText(s) {
+  const v = String(s || '').toLowerCase();
+  if (v === 'running' || v === 'up') return '运行中';
+  if (v === 'stopped' || v === 'exited' || v === 'created' || v === 'paused') return '已停止';
+  return s || '未知';
+}
+function appStatusClass(s) {
+  const v = String(s || '').toLowerCase();
+  if (v === 'running' || v === 'up') return 'online';
+  return 'offline';
+}
+// 图标加载失败（404/网络错误）时回退为文字占位
+function iconError(app) {
+  app.iconError = true;
+}
+
 
 let monitorTimer = null;
 function startMonitorRefresh() {
@@ -515,15 +675,7 @@ const App = {
   components: { ProgressBar, LineChart },
   setup() {
     function handleHash() {
-      const m = location.hash.match(/^#\/monitor\/(\d+)/);
-      if (m) {
-        state.monitorId = Number(m[1]);
-        state.view = 'monitor';
-        state.monitor.data = null;
-        fetchMonitor();
-      } else {
-        state.view = 'list';
-      }
+      routeHash();
     }
 
     onMounted(() => {
@@ -555,6 +707,17 @@ const App = {
     const currentMonitorName = computed(() => {
       const p = state.panels.find((x) => x.id === state.monitorId);
       return p ? p.name : '';
+    });
+    const filteredApps = computed(() => {
+      const q = (state.monitor.appSearch || '').trim().toLowerCase();
+      if (!q) return state.monitor.apps;
+      return state.monitor.apps.filter((a) =>
+        (a.name || '').toLowerCase().includes(q) ||
+        (a.appName || '').toLowerCase().includes(q) ||
+        (a.path || '').toLowerCase().includes(q) ||
+        String(a.httpPort || '').includes(q) ||
+        String(a.httpsPort || '').includes(q)
+      );
     });
 
     // 分类列表（去重，排除空）
@@ -601,7 +764,8 @@ const App = {
       panelForm, openAddPanel, openEditPanel, savePanel,
       passwordForm, openSettings, changePassword,
       doLogin, doLogout,
-      fetchMonitor, colorFor,
+      fetchMonitor, fetchApps, operateApp, syncApps, openUpgrade, doUpgrade, colorFor,
+      appStatusText, appStatusClass, filteredApps, iconError,
       diskUsedPercent, lastOf, monOnline, monError, emptyList, currentMonitorName,
       categories, filteredPanels, noFilterResult, setCategory, setVersion, setStatus,
       saveUiSettings,
@@ -734,7 +898,7 @@ const App = {
             <div class="card-actions">
               <div class="action-row">
                 <button class="btn btn-primary btn-sm" @click="openPanel(p)">打开面板</button>
-                <button class="btn btn-sm" @click="gotoMonitor(p.id)">监控</button>
+                <button class="btn btn-sm" @click="gotoMonitor(p.id)">管理面板</button>
                 <button class="btn btn-sm" :disabled="p._refreshing" @click="refreshPanel(p.id)">刷新</button>
                 <button class="btn btn-sm" @click="restartPanel(p)" title="重启面板">重启面板</button>
                 <button class="btn btn-sm btn-danger" @click="rebootPanel(p)" title="重启所在系统">重启系统</button>
@@ -748,7 +912,7 @@ const App = {
         </div>
       </template>
 
-      <!-- 监控详情 -->
+      <!-- 管理面板（页签） -->
       <template v-else-if="state.view === 'monitor'">
         <div class="monitor-head">
           <div class="title">
@@ -758,7 +922,7 @@ const App = {
               <span class="dot"></span>{{ monOnline ? '在线' : '离线' }}
             </span>
           </div>
-          <div class="controls">
+          <div class="controls" v-if="!monError">
             <label>
               <span class="switch">
                 <input type="checkbox" v-model="state.monitor.autoRefresh" @change="saveUiSettings" />
@@ -774,99 +938,196 @@ const App = {
           </div>
         </div>
 
-        <div v-if="monError" class="error-msg" style="margin-bottom:14px">{{ monError }}</div>
-
-        <div v-if="monOnline">
-          <!-- 主机信息 -->
-          <div class="section">
-            <div class="section-title">主机信息</div>
-            <div class="host-grid">
-              <div class="host-item"><span class="hk">主机名</span><span class="hv">{{ state.monitor.data.base?.hostname || '-' }}</span></div>
-              <div class="host-item"><span class="hk">操作系统</span><span class="hv">{{ state.monitor.data.base?.os || state.monitor.data.os?.os || '-' }}</span></div>
-              <div class="host-item"><span class="hk">发行版</span><span class="hv">{{ state.monitor.data.base?.prettyDistro || state.monitor.data.os?.prettyDistro || '-' }}</span></div>
-              <div class="host-item"><span class="hk">内核</span><span class="hv">{{ state.monitor.data.base?.kernelVersion || state.monitor.data.os?.kernelVersion || '-' }}</span></div>
-              <div class="host-item"><span class="hk">架构</span><span class="hv">{{ state.monitor.data.base?.kernelArch || state.monitor.data.os?.kernelArch || '-' }}</span></div>
-              <div class="host-item"><span class="hk">平台</span><span class="hv">{{ state.monitor.data.base?.platform || state.monitor.data.os?.platform || '-' }}</span></div>
-              <div class="host-item"><span class="hk">CPU 型号</span><span class="hv">{{ state.monitor.data.base?.cpuModelName || '-' }}</span></div>
-              <div class="host-item"><span class="hk">CPU 核心</span><span class="hv">{{ state.monitor.data.base?.cpuCores || '-' }} 核</span></div>
-              <div class="host-item"><span class="hk">IP 地址</span><span class="hv">{{ state.monitor.data.base?.ipV4Addr || '-' }}</span></div>
-              <div class="host-item"><span class="hk">运行时长</span><span class="hv">{{ fmt.uptime(state.monitor.data.current?.runningTime) }}</span></div>
-            </div>
-          </div>
-
-          <!-- 实时指标 -->
-          <div class="section">
-            <div class="section-title">实时指标 <span style="color:var(--muted);font-weight:400;font-size:12px" v-if="state.monitor.data.current?.shotTime">采样于 {{ fmt.clock(state.monitor.data.current.shotTime) }}</span></div>
-            <div class="stat-grid">
-              <div class="stat-card">
-                <div class="k">CPU 使用率</div>
-                <div class="v" :style="{ color: colorFor(state.monitor.data.current?.cpuUsedPercent) }">{{ fmt.pct(state.monitor.data.current?.cpuUsedPercent) }}</div>
-                <div class="s">共 {{ state.monitor.data.current?.cpuTotal ?? '-' }} 核</div>
-              </div>
-              <div class="stat-card">
-                <div class="k">内存使用率</div>
-                <div class="v" :style="{ color: colorFor(state.monitor.data.current?.memoryUsedPercent) }">{{ fmt.pct(state.monitor.data.current?.memoryUsedPercent) }}</div>
-                <div class="s">{{ fmt.bytes(state.monitor.data.current?.memoryUsed) }} / {{ fmt.bytes(state.monitor.data.current?.memoryTotal) }}</div>
-              </div>
-              <div class="stat-card">
-                <div class="k">负载 (1/5/15 分钟)</div>
-                <div class="v" style="font-size:16px">{{ fmt.num(state.monitor.data.current?.load1) }} / {{ fmt.num(state.monitor.data.current?.load5) }} / {{ fmt.num(state.monitor.data.current?.load15) }}</div>
-                <div class="s">使用率 {{ fmt.pct(state.monitor.data.current?.loadUsagePercent) }}</div>
-              </div>
-              <div class="stat-card">
-                <div class="k">网络（收 / 发）</div>
-                <div class="v" style="font-size:16px">{{ fmt.bytes(state.monitor.data.current?.netBytesRecv) }} ↓</div>
-                <div class="s">{{ fmt.bytes(state.monitor.data.current?.netBytesSent) }} ↑</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 磁盘 -->
-          <div class="section">
-            <div class="section-title">磁盘</div>
-            <div class="disk-list">
-              <div v-for="(d, i) in state.monitor.data.current?.diskData || []" :key="i" class="disk-item">
-                <span class="path">{{ d.path }}</span>
-                <div class="bar"><span :style="{ width: fmt.pct(d.usedPercent), background: colorFor(d.usedPercent) }"></span></div>
-                <span class="info">{{ fmt.pct(d.usedPercent) }} · {{ fmt.bytes(d.used) }} / {{ fmt.bytes(d.total) }}</span>
-              </div>
-              <div v-if="!(state.monitor.data.current?.diskData || []).length" class="error-msg">无磁盘数据</div>
-            </div>
-          </div>
-
-          <!-- 历史趋势 -->
-          <div class="section">
-            <div class="section-title">历史趋势（最近 30 分钟）</div>
-            <div class="chart-grid">
-              <div class="chart-card">
-                <div class="cc-head">
-                  <span class="t">CPU 使用率</span>
-                  <span class="cur">{{ fmt.pct(lastOf(state.monitor.data.series?.cpu?.values)) }}</span>
-                </div>
-                <LineChart :values="state.monitor.data.series?.cpu?.values" color="#3b82f6" />
-              </div>
-              <div class="chart-card">
-                <div class="cc-head">
-                  <span class="t">内存使用率</span>
-                  <span class="cur">{{ fmt.pct(lastOf(state.monitor.data.series?.memory?.values)) }}</span>
-                </div>
-                <LineChart :values="state.monitor.data.series?.memory?.values" color="#8b5cf6" />
-              </div>
-              <div class="chart-card">
-                <div class="cc-head">
-                  <span class="t">系统负载（1 分钟）</span>
-                  <span class="cur">{{ fmt.num(lastOf(state.monitor.data.series?.load?.values)) }}</span>
-                </div>
-                <LineChart :values="state.monitor.data.series?.load?.values" color="#f59e0b" />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div v-else-if="!state.monitor.loading" class="empty">
+        <!-- 异常时只显示错误，隐藏 tabs / 搜索栏 / 内容 -->
+        <div v-if="monError" class="empty" style="padding:60px 20px">
           <div class="icon">🔌</div>
           <h3>无法连接该面板</h3>
-          <p>{{ state.monitor.data?.error || '请检查面板地址、端口与接口密钥' }}</p>
+          <p>{{ monError }}</p>
         </div>
+
+        <template v-else>
+        <!-- 页签导航 -->
+        <div class="tabs">
+          <button class="tab" :class="{ active: state.monitor.activeTab === 'home' }" @click="state.monitor.activeTab = 'home'; fetchMonitor()">首页</button>
+          <button class="tab" :class="{ active: state.monitor.activeTab === 'apps' }" @click="state.monitor.activeTab = 'apps'; fetchApps()">应用</button>
+        </div>
+
+        <!-- ===== 首页 Tab ===== -->
+        <template v-if="state.monitor.activeTab === 'home'">
+          <!-- 面板统计 -->
+          <div v-if="state.monitor.stats" class="section">
+            <div class="section-title">面板概况</div>
+            <div class="stat-grid">
+              <div class="stat-card">
+                <div class="k">网站</div>
+                <div class="v">{{ state.monitor.stats.websiteNumber ?? '-' }}</div>
+              </div>
+              <div class="stat-card">
+                <div class="k">应用</div>
+                <div class="v">{{ state.monitor.stats.appInstalledNumber ?? '-' }}</div>
+              </div>
+              <div class="stat-card">
+                <div class="k">数据库</div>
+                <div class="v">{{ state.monitor.stats.databaseNumber ?? '-' }}</div>
+              </div>
+              <div class="stat-card">
+                <div class="k">容器</div>
+                <div class="v">{{ state.monitor.stats.containerNumber ?? '-' }}</div>
+              </div>
+              <div class="stat-card">
+                <div class="k">面板版本</div>
+                <div class="v" style="font-size:16px">{{ state.monitor.stats.systemVersion || '-' }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="monOnline">
+            <!-- 主机信息 -->
+            <div class="section">
+              <div class="section-title">主机信息</div>
+              <div class="host-grid">
+                <div class="host-item"><span class="hk">主机名</span><span class="hv">{{ state.monitor.data.base?.hostname || '-' }}</span></div>
+                <div class="host-item"><span class="hk">操作系统</span><span class="hv">{{ state.monitor.data.base?.os || state.monitor.data.os?.os || '-' }}</span></div>
+                <div class="host-item"><span class="hk">发行版</span><span class="hv">{{ state.monitor.data.base?.prettyDistro || state.monitor.data.os?.prettyDistro || '-' }}</span></div>
+                <div class="host-item"><span class="hk">内核</span><span class="hv">{{ state.monitor.data.base?.kernelVersion || state.monitor.data.os?.kernelVersion || '-' }}</span></div>
+                <div class="host-item"><span class="hk">架构</span><span class="hv">{{ state.monitor.data.base?.kernelArch || state.monitor.data.os?.kernelArch || '-' }}</span></div>
+                <div class="host-item"><span class="hk">平台</span><span class="hv">{{ state.monitor.data.base?.platform || state.monitor.data.os?.platform || '-' }}</span></div>
+                <div class="host-item"><span class="hk">CPU 型号</span><span class="hv">{{ state.monitor.data.base?.cpuModelName || '-' }}</span></div>
+                <div class="host-item"><span class="hk">CPU 核心</span><span class="hv">{{ state.monitor.data.base?.cpuCores || '-' }} 核</span></div>
+                <div class="host-item"><span class="hk">IP 地址</span><span class="hv">{{ state.monitor.data.base?.ipV4Addr || '-' }}</span></div>
+                <div class="host-item"><span class="hk">运行时长</span><span class="hv">{{ fmt.uptime(state.monitor.data.current?.runningTime) }}</span></div>
+              </div>
+            </div>
+
+            <!-- 实时指标 -->
+            <div class="section">
+              <div class="section-title">实时指标 <span style="color:var(--muted);font-weight:400;font-size:12px" v-if="state.monitor.data.current?.shotTime">采样于 {{ fmt.clock(state.monitor.data.current.shotTime) }}</span></div>
+              <div class="stat-grid">
+                <div class="stat-card">
+                  <div class="k">CPU 使用率</div>
+                  <div class="v" :style="{ color: colorFor(state.monitor.data.current?.cpuUsedPercent) }">{{ fmt.pct(state.monitor.data.current?.cpuUsedPercent) }}</div>
+                  <div class="s">共 {{ state.monitor.data.current?.cpuTotal ?? '-' }} 核</div>
+                </div>
+                <div class="stat-card">
+                  <div class="k">内存使用率</div>
+                  <div class="v" :style="{ color: colorFor(state.monitor.data.current?.memoryUsedPercent) }">{{ fmt.pct(state.monitor.data.current?.memoryUsedPercent) }}</div>
+                  <div class="s">{{ fmt.bytes(state.monitor.data.current?.memoryUsed) }} / {{ fmt.bytes(state.monitor.data.current?.memoryTotal) }}</div>
+                </div>
+                <div class="stat-card">
+                  <div class="k">负载 (1/5/15 分钟)</div>
+                  <div class="v" style="font-size:16px">{{ fmt.num(state.monitor.data.current?.load1) }} / {{ fmt.num(state.monitor.data.current?.load5) }} / {{ fmt.num(state.monitor.data.current?.load15) }}</div>
+                  <div class="s">使用率 {{ fmt.pct(state.monitor.data.current?.loadUsagePercent) }}</div>
+                </div>
+                <div class="stat-card">
+                  <div class="k">网络（收 / 发）</div>
+                  <div class="v" style="font-size:16px">{{ fmt.bytes(state.monitor.data.current?.netBytesRecv) }} ↓</div>
+                  <div class="s">{{ fmt.bytes(state.monitor.data.current?.netBytesSent) }} ↑</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 磁盘 -->
+            <div class="section">
+              <div class="section-title">磁盘</div>
+              <div class="disk-list">
+                <div v-for="(d, i) in state.monitor.data.current?.diskData || []" :key="i" class="disk-item">
+                  <span class="path">{{ d.path }}</span>
+                  <div class="bar"><span :style="{ width: fmt.pct(d.usedPercent), background: colorFor(d.usedPercent) }"></span></div>
+                  <span class="info">{{ fmt.pct(d.usedPercent) }} · {{ fmt.bytes(d.used) }} / {{ fmt.bytes(d.total) }}</span>
+                </div>
+                <div v-if="!(state.monitor.data.current?.diskData || []).length" class="error-msg">无磁盘数据</div>
+              </div>
+            </div>
+
+            <!-- 历史趋势 -->
+            <div class="section">
+              <div class="section-title">历史趋势（最近 30 分钟）</div>
+              <div class="chart-grid">
+                <div class="chart-card">
+                  <div class="cc-head">
+                    <span class="t">CPU 使用率</span>
+                    <span class="cur">{{ fmt.pct(lastOf(state.monitor.data.series?.cpu?.values)) }}</span>
+                  </div>
+                  <LineChart :values="state.monitor.data.series?.cpu?.values" color="#3b82f6" />
+                </div>
+                <div class="chart-card">
+                  <div class="cc-head">
+                    <span class="t">内存使用率</span>
+                    <span class="cur">{{ fmt.pct(lastOf(state.monitor.data.series?.memory?.values)) }}</span>
+                  </div>
+                  <LineChart :values="state.monitor.data.series?.memory?.values" color="#8b5cf6" />
+                </div>
+                <div class="chart-card">
+                  <div class="cc-head">
+                    <span class="t">系统负载（1 分钟）</span>
+                    <span class="cur">{{ fmt.num(lastOf(state.monitor.data.series?.load?.values)) }}</span>
+                  </div>
+                  <LineChart :values="state.monitor.data.series?.load?.values" color="#f59e0b" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="!state.monitor.loading" class="empty">
+            <div class="icon">🔌</div>
+            <h3>无法连接该面板</h3>
+            <p>{{ state.monitor.data?.error || '请检查面板地址、端口与接口密钥' }}</p>
+          </div>
+        </template>
+
+        <!-- ===== 应用 Tab ===== -->
+        <template v-if="state.monitor.activeTab === 'apps'">
+          <div class="section">
+            <div class="app-toolbar">
+              <input class="app-search" v-model="state.monitor.appSearch" placeholder="搜索应用名称 / 端口 / 路径..." />
+              <div class="app-toolbar-actions">
+                <span class="count">{{ filteredApps.length }} / {{ state.monitor.apps.length }}</span>
+                <button class="btn btn-sm" :disabled="state.monitor.appsLoading" @click="fetchApps">刷新</button>
+                <button class="btn btn-sm" @click="syncApps">同步</button>
+              </div>
+            </div>
+            <div v-if="state.monitor.appsLoading" style="text-align:center;padding:40px;color:var(--muted)">加载中...</div>
+            <div v-else-if="state.monitor.apps.length === 0" class="empty" style="padding:40px">
+              <div class="icon">📦</div>
+              <h3>暂无已安装应用</h3>
+              <p>请前往 1Panel 面板的应用商店安装应用</p>
+            </div>
+            <div v-else-if="filteredApps.length === 0" class="empty" style="padding:40px">
+              <div class="icon">🔍</div>
+              <h3>没有匹配的应用</h3>
+              <p>试试调整搜索关键词</p>
+            </div>
+            <div v-else class="app-list">
+              <div v-for="app in filteredApps" :key="app.id" class="app-card" :class="{ 'has-update': app.canUpdate }">
+                <img v-if="app.iconUrl && !app.iconError" :src="app.iconUrl" class="app-icon" loading="lazy" alt="" @error="iconError(app)" />
+                <div v-else class="app-icon app-icon-placeholder">{{ (app.name || '?')[0] }}</div>
+                <div class="app-info">
+                  <div class="app-name-row">
+                    <span class="app-name">{{ app.name }}</span>
+                    <span v-if="app.version" class="app-version">v{{ app.version }}</span>
+                    <span v-if="app.canUpdate" class="upgrade-badge">可升级</span>
+                  </div>
+                  <div class="app-meta-row">
+                    <span class="badge" :class="appStatusClass(app.status)"><span class="dot"></span>{{ appStatusText(app.status) }}</span>
+                    <span v-if="app.httpPort" class="port-tag">HTTP {{ app.httpPort }}</span>
+                    <span v-if="app.httpsPort" class="port-tag">HTTPS {{ app.httpsPort }}</span>
+                  </div>
+                  <div v-if="app.path" class="app-path" :title="app.path">📁 {{ app.path }}</div>
+                  <div class="app-footer">
+                    <span v-if="app.createdAt" class="app-meta-text">创建于 {{ app.createdAt.slice(0, 10) }}</span>
+                    <div class="app-actions">
+                      <button class="btn btn-sm" :disabled="state.monitor.appOps[app.id]" @click="operateApp(app, 'start')" v-if="app.status.toLowerCase() !== 'running'">启动</button>
+                      <button class="btn btn-sm" :disabled="state.monitor.appOps[app.id]" @click="operateApp(app, 'stop')" v-if="app.status.toLowerCase() === 'running'">停止</button>
+                      <button class="btn btn-sm" :disabled="state.monitor.appOps[app.id]" @click="operateApp(app, 'restart')">重启</button>
+                      <button class="btn btn-sm" :disabled="state.monitor.appOps[app.id]" @click="openUpgrade(app)" v-if="app.canUpdate">升级</button>
+                      <button class="btn btn-sm btn-danger" :disabled="state.monitor.appOps[app.id]" @click="operateApp(app, 'uninstall')">卸载</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+        </template>
       </template>
     </div>
 
@@ -943,6 +1204,33 @@ const App = {
         <div class="modal-actions">
           <button class="btn" @click="state.showSettings = false">取消</button>
           <button class="btn btn-primary" @click="changePassword">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 应用升级弹窗 -->
+    <div v-if="state.monitor.upgradeApp" class="modal-mask" @click.self="state.monitor.upgradeApp = null">
+      <div class="modal">
+        <h2>升级「{{ state.monitor.upgradeApp.name }}」</h2>
+        <div class="field">
+          <label>当前版本</label>
+          <div class="upgrade-current">v{{ state.monitor.upgradeApp.version }}</div>
+        </div>
+        <div class="field">
+          <label>选择目标版本</label>
+          <div v-if="state.monitor.upgradeLoading" style="text-align:center;padding:20px;color:var(--muted)">加载中...</div>
+          <div v-else-if="state.monitor.upgradeVersions.length === 0" class="error-msg">暂无可用升级版本</div>
+          <select v-else class="upgrade-select" v-model.number="state.monitor.upgradeIndex">
+            <option v-for="(ver, i) in state.monitor.upgradeVersions" :key="ver.detailId || i" :value="i">
+              {{ ver.version }}{{ i === 0 ? '（最新）' : '' }}
+            </option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" @click="state.monitor.upgradeApp = null">取消</button>
+          <button class="btn btn-primary" :disabled="state.monitor.upgradeLoading || state.monitor.upgradeVersions.length === 0" @click="doUpgrade(state.monitor.upgradeApp, state.monitor.upgradeVersions[state.monitor.upgradeIndex])">
+            确认升级
+          </button>
         </div>
       </div>
     </div>

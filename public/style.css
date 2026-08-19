@@ -333,6 +333,184 @@ a { color: var(--primary); text-decoration: none; }
 
 .badge.category { background: #f3e8ff; color: #7c3aed; }
 
+/* ---------- 页签导航 ---------- */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+.tab {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: all .15s;
+  font-family: inherit;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* ---------- 应用搜索工具栏 ---------- */
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.app-search {
+  flex: 1;
+  min-width: 160px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 13px;
+  background: #fbfcfe;
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+.app-search:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,.12); background: #fff; }
+.app-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.app-toolbar-actions .count { font-size: 12px; color: var(--muted); }
+
+/* ---------- 应用列表 ---------- */
+.app-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.app-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  transition: border-color .2s, box-shadow .2s;
+}
+.app-card.has-update {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, .12), var(--shadow);
+}
+.app-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.app-name-row { display: flex; align-items: baseline; gap: 8px; }
+.app-name { font-size: 14px; font-weight: 700; }
+.app-version { font-size: 12px; color: var(--muted); font-weight: 500; }
+.upgrade-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #f59e0b;
+  color: #fff;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .7; }
+}
+.app-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.app-meta-text { font-size: 12px; color: var(--muted); }
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.app-actions .btn { font-size: 11px; padding: 5px 8px; border-radius: 6px; }
+
+.app-icon {
+  width: 56px; height: 56px;
+  border-radius: 12px;
+  object-fit: contain;
+  flex-shrink: 0;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  padding: 4px;
+}
+.app-icon-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--primary);
+  background: #eef2ff;
+  line-height: 1;
+}
+.app-ports { display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+.port-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-family: monospace;
+}
+.app-path {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+
+/* ---------- 应用升级弹窗 ---------- */
+.upgrade-current {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.upgrade-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fbfcfe;
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+.upgrade-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .12);
+  background: #fff;
+}
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
@@ -344,6 +522,13 @@ a { color: var(--primary); text-decoration: none; }
   .toolbar-actions { justify-content: stretch; flex-wrap: wrap; }
   .toolbar-actions .btn { margin-left: auto; }
   .filter-label { min-width: 28px; }
+  .app-card { display: block; position: relative; }
+  .app-icon { position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; border-radius: 8px; padding: 2px; }
+  .app-icon-placeholder { font-size: 16px; }
+  .app-name-row { padding-right: 54px; }
+  .app-toolbar { flex-direction: column; align-items: stretch; }
+  .app-toolbar-actions { justify-content: flex-end; }
+  .app-path { max-width: 100%; }
 }
 @media (max-width: 420px) {
   .list-toolbar { padding: 12px; }
