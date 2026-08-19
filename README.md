@@ -98,7 +98,19 @@ npm run dev
 
 ---
 
-## 6. 项目结构
+## 6.界面预览
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/images/home.png" alt="首页"><br>首页（面板列表）</td>
+    <td align="center" width="33%"><img src="docs/images/monitor.png" alt="监控详情"><br>监控详情</td>
+    <td align="center" width="33%"><img src="docs/images/addPanel.png" alt="添加面板"><br>添加面板</td>
+  </tr>
+</table>
+
+---
+
+## 7. 项目结构
 
 ```
 1PanelManager/
@@ -118,13 +130,15 @@ npm run dev
 │   ├── style.css             # 样式
 │   └── vendor/
 │       └── vue.global.prod.js  # 本地 Vue 3（无 CDN 依赖）
-├── 1PanelApiDoc/             # 1Panel API 接口文档（v1doc.json / v2doc.json）
+├── docs/
+│   ├── 1PanelApiDoc/         # 1Panel API 接口文档（v1doc.json / v2doc.json）
+│   └── images/               # README 界面截图
 └── data/                     # 运行时生成（panels.db，已加入 .gitignore）
 ```
 
 ---
 
-## 7. API 说明
+## 8. API 说明
 
 本管理后台自身的接口。除登录/退出外，均需携带请求头 `Authorization: Bearer <token>`。
 
@@ -147,7 +161,7 @@ npm run dev
 
 ---
 
-## 8. 1Panel API 鉴权说明
+## 9. 1Panel API 鉴权说明
 
 1Panel 接口通过两个请求头鉴权：
 
@@ -165,7 +179,7 @@ npm run dev
 
 ---
 
-## 9. 注意事项
+## 10. 注意事项
 
 - **打开面板方式**：使用 `window.open` 打开真实地址，不使用 iframe，因此不存在跨站 iframe 的 Cookie 拦截问题（iframe 方案下 1Panel 返回 `401 ErrAuth` 即源于第三方 Cookie 限制）。
 - **历史趋势需面板开启监控**：若监控页历史趋势无数据，请先在该 1Panel 面板的「监控」页面开启监控开关。本工具请求时间已按 1Panel 要求的 RFC3339 格式处理。
