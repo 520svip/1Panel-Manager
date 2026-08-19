@@ -1,0 +1,27 @@
+{
+  "name": "1panel-manager",
+  "version": "1.0.0",
+  "description": "集中管理多个 1Panel 面板的控制面板",
+  "author": "nameless",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/520svip/1panel-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/520svip/1panel-manager/issues"
+  },
+  "homepage": "https://github.com/520svip/1panel-manager#readme",
+  "type": "module",
+  "main": "start.js",
+  "scripts": {
+    "start": "node start.js",
+    "dev": "node start.js --watch"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
