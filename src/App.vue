@@ -2,7 +2,7 @@
   <!-- 登录 -->
   <div v-if="!isLoggedIn" class="login-wrap">
     <div class="login-card">
-      <div class="logo-lg">1P</div>
+      <div class="logo-lg">1PM</div>
       <h1>1Panel Manager</h1>
       <p>集中管理多个 1Panel 面板</p>
       <form @submit.prevent="submitLogin">
@@ -19,8 +19,11 @@
   <div v-else class="app-shell">
     <div class="topbar">
       <div class="brand">
-        <span class="logo">1P</span>
-        <span>1Panel Manager <small>集中管理多个 1Panel 面板</small></span>
+        <span class="logo">1PM</span>
+        <span class="brand-text">
+          <span class="brand-title">1Panel Manager</span>
+          <small>集中管理多个 1Panel 面板</small>
+        </span>
       </div>
       <button class="btn btn-primary" @click="openAddPanel">+ 添加面板</button>
       <button class="btn" @click="openSettings">设置</button>

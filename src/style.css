@@ -40,20 +40,37 @@ a { color: var(--primary); text-decoration: none; }
 .topbar .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 20px;
-  font-weight: 700;
+  gap: 14px;
   margin-right: auto;
+  line-height: 1.2;
 }
 .brand .logo {
-  width: 34px; height: 34px;
-  border-radius: 9px;
+  width: 44px; height: 44px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #3b82f6, #7c3aed);
   color: #fff;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 16px;
+  font-weight: 700; font-size: 17px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(59, 130, 246, .22);
 }
-.brand small { color: var(--muted); font-weight: 500; font-size: 12px; display: block; }
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.brand-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+.brand small {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
 
 /* ---------- 按钮 ---------- */
 .btn {
@@ -103,7 +120,7 @@ a { color: var(--primary); text-decoration: none; }
   background: linear-gradient(135deg, #3b82f6, #7c3aed);
   color: #fff;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 24px;
+  font-weight: 700; font-size: 20px;
   margin: 0 auto 16px;
 }
 .login-card h1 { font-size: 20px; text-align: center; margin: 0 0 4px; }
@@ -519,7 +536,10 @@ a { color: var(--primary); text-decoration: none; }
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
   .form-row, .form-row-3 { grid-template-columns: 1fr; }
-  .topbar .brand { font-size: 17px; }
+  .topbar .brand { gap: 10px; }
+  .brand .logo { width: 38px; height: 38px; font-size: 17px; border-radius: 10px; }
+  .brand-title { font-size: 17px; }
+  .brand small { display: none; }
   .disk-item { flex-wrap: wrap; }
   .disk-item .info { width: 100%; text-align: left; }
   .card-actions .action-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
