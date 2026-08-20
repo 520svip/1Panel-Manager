@@ -48,12 +48,10 @@ function requireAuthLoose(req, res, next) {
   next();
 }
 
-// 安全入口规范化：去首尾空格，非空时自动补前导 "/"
+// 安全入口规范化：仅去首尾空格；前导 "/" 在拼接 URL 时自动补充，不写入存储字段
 function normalizeEntry(entry) {
   if (!entry) return '';
-  let e = String(entry).trim();
-  if (e && !e.startsWith('/')) e = '/' + e;
-  return e;
+  return String(entry).trim();
 }
 
 // ---------- 鉴权 ----------
@@ -169,10 +167,42 @@ app.delete('/api/panels/:id', requireAuth, (req, res) => {
 });
 
 // ---------- 面板操作 ----------
+// 检测快照中的 CPU/内存/磁盘数据是否完整
+// V1 旧版在部分机器上 CPU/内存/磁盘采集会失败（IO/网络正常），这里只判断这三项
+function snapshotHasData(current) {
+  if (!current) return false;
+  const hasCpu = typeof current.cpuUsedPercent === 'number' && current.cpuUsedPercent > 0;
+  const hasMem = typeof current.memoryUsedPercent === 'number' && current.memoryUsedPercent > 0;
+  const hasDisk = Array.isArray(current.diskData) && current.diskData.length > 0
+    && (current.diskData[0]?.total || 0) > 0;
+  return hasCpu || hasMem || hasDisk;
+}
+
+// 检测面板端是否"在线但采集受限"（IO/网络有数据但 CPU/内存/磁盘全为 0）
+// 这是 1Panel V1 后端在部分机器/容器环境下的已知问题（gopsutil 采集失败）
+function snapshotPartialData(current) {
+  if (!current) return false;
+  const hasIoNet = (current.ioReadBytes > 0 || current.ioWriteBytes > 0
+    || current.netBytesSent > 0 || current.netBytesRecv > 0);
+  const noCpuMemDisk = (!current.cpuUsedPercent && !current.memoryUsedPercent
+    && (!Array.isArray(current.diskData) || current.diskData.length === 0));
+  return hasIoNet && noCpuMemDisk;
+}
+
 app.post('/api/panels/:id/refresh', requireAuth, async (req, res) => {
   const panel = getPanel(Number(req.params.id));
   if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
   const snap = await getSnapshot(panel);
+  const hasData = snapshotHasData(snap.current);
+  const partial = snapshotPartialData(snap.current);
+  let noDataHint = null;
+  if (snap.os.ok && !hasData) {
+    if (partial) {
+      noDataHint = '该面板在线，IO/网络数据正常，但 CPU/内存/磁盘采集失败（这是 1Panel V1 后端在部分机器/容器环境下的已知问题，与本工具无关；可尝试在面板服务器上重启 1Panel 服务）';
+    } else {
+      noDataHint = '该面板在线但 CPU/内存/磁盘数据未获取到（请到 1Panel 「监控」页面确认已启用；V1 旧版在部分机器/容器环境下采集受限）';
+    }
+  }
   res.json({
     code: 200,
     data: {
@@ -182,6 +212,8 @@ app.post('/api/panels/:id/refresh', requireAuth, async (req, res) => {
       current: snap.current,
       base: snap.base,
       os: snap.os.ok ? snap.os.data : null,
+      noData: snap.os.ok && !hasData, // 在线但 CPU/内存/磁盘都取不到
+      noDataHint,
     },
   });
 });
@@ -298,10 +330,22 @@ app.get('/api/panels/:id/apps', requireAuth, async (req, res) => {
   // 2. 拉取全量已安装应用
   const r = await getInstalledApps(panel);
   const items = r.ok ? (r.data?.items ?? []) : [];
-  // 为每个应用附加图标代理地址（GET /apps/icon/:appKey）
+  // 为每个应用附加图标地址：
+  //   1. 优先用应用列表自带的 icon 字段（V1 老版是 base64 PNG，V2 部分版本也有）
+  //   2. 否则走代理接口（GET /apps/icon/:appKey，V2 走这个）
   for (const it of items) {
     const appKey = it.appKey || it.key;
-    if (appKey) it.iconUrl = `/api/panels/${req.params.id}/apps/${encodeURIComponent(appKey)}/icon`;
+    const rawIcon = it.icon;
+    if (rawIcon && typeof rawIcon === 'string' && rawIcon.length > 0) {
+      // 已是 data URL 直接用；否则当作 base64 包装成 PNG data URL
+      if (rawIcon.startsWith('data:')) {
+        it.iconUrl = rawIcon;
+      } else {
+        it.iconUrl = `data:image/png;base64,${rawIcon}`;
+      }
+    } else if (appKey) {
+      it.iconUrl = `/api/panels/${req.params.id}/apps/${encodeURIComponent(appKey)}/icon`;
+    }
   }
   // 3. 若全局有更新，对所有应用逐个查可升级版本（canUpdate 字段不可靠，直接反向对比）
   if (globalCanUpdate && items.length > 0) {

@@ -1,16 +1,17 @@
 # 1Panel Manager
 
-一个基于 **Node.js + Vue 3 + SQLite** 的 [1Panel](https://github.com/1Panel-dev/1Panel) 面板集中管理工具。通过一个页面记录并管理多台 1Panel 面板，支持资源监控、批量状态查看与快捷跳转，手机端也能良好适配。
+一个基于 **Node.js + Vue 3 + SQLite** 的 [1Panel](https://github.com/1Panel-dev/1Panel) 面板集中管理工具。通过一个页面记录并管理多台 1Panel 面板（V1 / V2 混合），支持资源监控、批量状态查看、应用管理（启动/停止/重启/升级/卸载）与快捷跳转，手机端也能良好适配。
 
 ---
 
 ## 1. 前言
 
- 本项目是由于某个靓仔老是忘记面板地址，又因不是专业版，APP不能统一管理，在闲暇时间开发的，所以代码大部分靠AI生成，没有做过多的优化，仅供参考。不确保后续是否会继续维护，主要是Token不够用了（强烈谴责程总不借我点不用还的Token），如果有需要，可以自行fork。
+本项目是由于某个靓仔老是忘记面板地址，又因不是专业版，APP 不能统一管理，在闲暇时间开发的，所以代码大部分靠 AI 生成，没有做过多的优化，仅供参考。不确保后续是否会继续维护，主要是 Token 不够用了（强烈谴责程总不借我点不用还的 Token），如果有需要，可以自行 fork。
 
 ## 2. 功能特性
 
 - **多面板集中管理**：记录每台面板的「名称、协议、地址、端口、安全入口、面板版本（V1/V2）、接口密钥、备注、分类」。
+- **V1 / V2 兼容**：自动适配两套 API 的鉴权、路由、字段名差异（详见下方「V1 / V2 适配说明」）。
 - **一键打开面板**：以 `window.open` 在新标签页打开 1Panel 真实地址，规避跨站 iframe 的 Cookie 限制。
 - **实时资源监控**：接入 1Panel API，在首页卡片直接查看 CPU / 内存 / 磁盘占用。
 - **监控详情页**：查看主机信息、CPU / 内存 / 负载 / 网络、磁盘分区、最近 30 分钟历史趋势图。
@@ -20,11 +21,12 @@
 - **组合筛选**：按「版本（V1/V2）」「状态（在线/离线）」「分类」多维度组合过滤。
 - **自动刷新**：首页列表与监控页均支持自动刷新，开关与间隔秒数可配置，并持久化到数据库。
 - **应用管理**：监控详情页「应用」Tab，查看已安装应用列表、状态、端口、路径；支持启动、停止、重启、卸载、升级操作。
+- **应用卸载确认弹窗**：可勾选「强制卸载 / 删除备份 / 删除镜像 / 删除数据库」等选项，V1/V2 各自支持的字段不同。
 - **应用升级**：一键升级，自动补齐 `detailId` / `version` / `dockerCompose` 等参数，兼容 1Panel 不同版本字段名差异。
-- **应用商店同步**：一键同步，先更新远程应用商店（`POST /apps/sync/remote`），再同步本地已安装应用（`POST /apps/sync/local`）。
-- **应用 Logo 显示**：通过代理获取 1Panel 应用图标并缓存，`<img>` 加载失败时自动回退为首字母占位。
+- **应用商店同步**：一键同步，分别调用远程商店更新和本地已安装应用同步接口。
+- **应用 Logo 显示**：V1 直接读取应用列表里的 base64 图标；V2 走代理获取并缓存，`<img>` 加载失败时自动回退为首字母占位。
 - **电源操作**：重启面板（`restart/1panel`）、重启所在系统（`restart/system`）。
-- **后台登录鉴权**：访问需密码，未登录无法查看/操作任何面板；支持修改密码。
+- **后台登录鉴权**：访问需密码，未登录无法查看 / 操作任何面板；支持修改密码。
 - **登录后路由恢复**：未登录时直接访问监控详情页 URL，登录后自动跳回该页面并加载数据。
 - **异常页面精简**：面板连接失败时仅显示错误提示，隐藏页签与搜索栏等多余 UI，一目了然。
 - **并发保护**：批量刷新采用并发限流 + 链式调度，大量机器也不会造成请求风暴或堆积。
@@ -103,15 +105,16 @@ npm run dev
 7. 应用管理（监控详情页 → 「应用」Tab）：
    - 查看已安装应用列表，每项展示名称、版本、状态、端口、路径
    - 操作按钮：**启动 / 停止 / 重启 / 升级 / 卸载**
+   - **卸载弹窗**：可勾选「强制卸载 / 删除备份 / 删除镜像 / 删除数据库」，V1/V2 各自支持的选项不同
    - **同步**：先更新远程应用商店，再同步本地已安装应用
-   - **应用 Logo**：自动从 1Panel 获取并显示，加载失败回退为首字母
+   - **应用 Logo**：V1 直接显示应用列表里的 base64 图标；V2 通过代理获取并显示，加载失败回退为首字母
    - 搜索框：按应用名称、端口、路径模糊搜索
    - 可升级的应用右侧有橙色「可升级」徽标
 8. 右上角「设置」修改后台密码，「退出」销毁会话。
 
 ---
 
-## 6.界面预览
+## 6. 界面预览
 
 <table>
   <tr>
@@ -123,7 +126,29 @@ npm run dev
 
 ---
 
-## 7. 项目结构
+## 7. V1 / V2 适配说明
+
+1Panel V1 和 V2 在 API 设计上有较大差异，本工具自动适配，无需手动配置（添加面板时选择对应版本即可）。主要差异点：
+
+| 项目 | V1 | V2 |
+| --- | --- | --- |
+| **鉴权** | `md5("1panel" + API-Key + timestamp)` | `HMAC-SHA256(API-Key, "1panel:" + timestamp)` |
+| **基础信息 API** | `GET /dashboard/base/:io/:net` | 同 V1（结构一致） |
+| **实时监控 API** | `POST /dashboard/current`，body `{ioOption, netOption, scope}` | `GET /dashboard/current/:io/:net` |
+| **监控 scope** | 必须传 `"basic"`（CPU/内存/磁盘/负载） + `"ioNet"`（IO/网络）各一次再合并 | 无此参数 |
+| **卸载操作名** | `operate: "delete"` | `operate: "delete"` |
+| **卸载支持字段** | `forceDelete` / `deleteBackup` | `forceDelete` / `deleteBackup` / `deleteImage` / `deleteDB` / `taskID` |
+| **同步应用商店** | `POST /apps/sync`（一个接口搞定） | `POST /apps/sync/remote` + `POST /apps/sync/local` |
+| **应用图标** | 应用列表自带 `icon` 字段（base64 PNG） | 走 `GET /apps/icon/:appKey` 代理获取 |
+| **主机 IP 字段** | `ipv4Addr`（小写 v） | `ipV4Addr`（大写 V） |
+| **运行时长字段** | `uptime`（秒数） | `runningTime`（结构化） |
+| **发行版字段** | 无 `prettyDistro`，只有 `platformVersion` | 有 `prettyDistro` |
+
+> 如果你看到的 V1 面板 CPU / 内存 / 磁盘全是 0，那是因为 V1 后端在 `scope: "all"` 下不会采集基础信息。本工具会自动用 `scope: "basic"` 和 `scope: "ioNet"` 各调一次再合并，确保拿到完整数据。
+
+---
+
+## 8. 项目结构
 
 ```
 1PanelManager/
@@ -136,7 +161,7 @@ npm run dev
 ├── lib/
 │   ├── db.js                 # SQLite 数据访问（node:sqlite，零编译依赖）
 │   ├── auth.js               # 后台登录鉴权与会话管理
-│   └── panelApi.js           # 1Panel API 客户端（V1/V2 签名、请求、超时）
+│   └── panelApi.js           # 1Panel API 客户端（V1/V2 签名、请求、字段适配）
 ├── public/
 │   ├── index.html            # 前端入口
 │   ├── app.js                # Vue 3 单页应用
@@ -144,16 +169,16 @@ npm run dev
 │   └── vendor/
 │       └── vue.global.prod.js  # 本地 Vue 3（无 CDN 依赖）
 ├── docs/
-│   ├── 1PanelApiDoc/         # 1Panel API 接口文档（v1doc.json / v2doc.json）
+│   ├── swagger/              # 1Panel Swagger 接口文档（v1doc.json / v2doc.json）
 │   └── images/               # README 界面截图
 └── data/                     # 运行时生成（panels.db，已加入 .gitignore）
 ```
 
 ---
 
-## 8. API 说明
+## 9. API 说明
 
-本管理后台自身的接口。除登录/退出外，均需携带请求头 `Authorization: Bearer <token>`。
+本管理后台自身的接口。除登录 / 退出外，均需携带请求头 `Authorization: Bearer <token>`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -179,7 +204,7 @@ npm run dev
 
 ---
 
-## 9. 1Panel API 鉴权说明
+## 10. 1Panel API 鉴权说明
 
 1Panel 接口通过两个请求头鉴权：
 
@@ -190,14 +215,14 @@ npm run dev
 
 签名生成方式（本工具已封装，无需手动处理）：
 
-- **V1**：`1Panel-Token` 直接为 API Key。
+- **V1**：`1Panel-Token = md5("1panel" + API-Key + timestamp)`。
 - **V2**（推荐）：`1Panel-Token = HMAC-SHA256(API-Key, "1panel:" + timestamp)`。
 
 > 详情见 1Panel 官方文档：[V1](https://1panel.cn/docs/v1/dev_manual/api_manual/) / [V2](https://1panel.cn/docs/v2/dev_manual/api_manual/)。
 
 ---
 
-## 10. 注意事项
+## 11. 注意事项
 
 - **打开面板方式**：使用 `window.open` 打开真实地址，不使用 iframe，因此不存在跨站 iframe 的 Cookie 拦截问题（iframe 方案下 1Panel 返回 `401 ErrAuth` 即源于第三方 Cookie 限制）。
 - **历史趋势需面板开启监控**：若监控页历史趋势无数据，请先在该 1Panel 面板的「监控」页面开启监控开关。本工具请求时间已按 1Panel 要求的 RFC3339 格式处理。
@@ -207,6 +232,7 @@ npm run dev
   - 对外请求超时 8 秒，离线机器快速失败不拖慢整体。
   - 定时刷新采用「上一轮结束后间隔 N 秒」的链式调度，不会因一轮耗时超过间隔而堆积请求。
 - **数据位置**：所有面板配置与 UI 设置保存在 `data/panels.db`，备份该文件即可备份全部数据。
+- **API 路径不含安全入口**：本工具请求 1Panel API 时**不会**在 URL 中拼接「安全入口」（仅打开面板网页时才用），无需在面板配置中纠结 entry 字段。
 
 ---
 

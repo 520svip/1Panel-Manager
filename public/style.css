@@ -314,6 +314,10 @@ a { color: var(--primary); text-decoration: none; }
 .ctrl-label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .ctrl-label input[type="number"] { width: 56px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; }
 
+.checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer; user-select: none; }
+.checkbox-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+.checkbox-label input[type="checkbox"]:disabled + span { color: var(--muted); cursor: not-allowed; }
+
 .filter-bar { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); }
 .filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .filter-label { font-size: 12px; color: var(--muted); min-width: 32px; flex-shrink: 0; }

@@ -34,7 +34,7 @@ const fmt = {
     return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   },
   uptime(rt) {
-    if (!rt) return '-';
+    if (rt == null || rt === '' || rt === 0) return '-';
     if (typeof rt === 'object') {
       const parts = [];
       if (rt.days) parts.push(rt.days + '天');
@@ -43,8 +43,14 @@ const fmt = {
       return parts.join(' ') || '-';
     }
     const sec = Number(rt) || 0;
-    const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
-    return d > 0 ? `${d}天 ${h}时` : (h > 0 ? `${h}时 ${m}分` : `${m}分`);
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const parts = [];
+    if (d) parts.push(d + '天');
+    if (h) parts.push(h + '时');
+    parts.push(m + '分');
+    return parts.join(' ');
   },
   maskKey(k) {
     if (!k) return '-';
@@ -103,6 +109,8 @@ const state = reactive({
     upgradeVersions: [],
     upgradeIndex: 0,
     upgradeLoading: false,
+    uninstallApp: null, // 待卸载的应用
+    uninstallOpts: { forceDelete: false, deleteBackup: false, deleteImage: true, deleteDB: true }, // 卸载选项
   },
   list: {
     autoRefresh: true,
@@ -167,6 +175,8 @@ async function refreshPanel(id, silent = false) {
     p._error = data.error;
     p._current = data.current;
     p._base = data.base;
+    p._noData = !!data.noData;
+    p._noDataHint = data.noDataHint || null;
     if (!silent && data.online) toast(`「${p.name}」已刷新`);
   } catch (e) {
     p._online = false;
@@ -199,6 +209,12 @@ function normalizeEntry(entry) {
   let e = String(entry).trim();
   if (e && !e.startsWith('/')) e = '/' + e;
   return e;
+}
+// 显示用：安全入口补前导 "/"（存储值不含 /，拼接地址时展示）
+function panelEntry(entry) {
+  if (!entry) return '';
+  const e = String(entry).trim();
+  return e.startsWith('/') ? e : '/' + e;
 }
 
 function gotoMonitor(id) {
@@ -468,8 +484,11 @@ async function fetchApps() {
     const token = localStorage.getItem('pm_token') || '';
     const apps = await api(`/api/panels/${id}/apps`) || [];
     // <img> 无法带 Authorization 头，把会话 token 拼到图标 URL 上
+    // data URL 不需要 token（内嵌图片数据，不发请求），只给代理 URL 拼 token
     state.monitor.apps = apps.map((a) => {
-      if (a.iconUrl && token) a.iconUrl += (a.iconUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+      if (a.iconUrl && token && !a.iconUrl.startsWith('data:')) {
+        a.iconUrl += (a.iconUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+      }
       return a;
     });
   } catch (e) {
@@ -484,21 +503,57 @@ async function operateApp(app, operate) {
   const labels = { start: '启动', stop: '停止', restart: '重启', uninstall: '卸载' };
   const label = labels[operate] || operate;
   if (operate === 'uninstall') {
-    if (!confirm(`确定要卸载应用「${app.name}」吗？\n该操作会移除应用及其容器，请谨慎！`)) return;
-  } else if (!confirm(`确定要对「${app.name}」执行「${label}」操作吗？`)) {
+    // 打开卸载确认弹窗（带选项）
+    state.monitor.uninstallApp = app;
     return;
   }
+  if (!confirm(`确定要对「${app.name}」执行「${label}」操作吗？`)) return;
   const key = app.id;
   if (state.monitor.appOps[key]) return;
   state.monitor.appOps[key] = true;
   try {
-    const extra = operate === 'uninstall' ? { forceDelete: true } : undefined;
     const r = await api(`/api/panels/${state.monitorId}/apps/${app.id}/op`, {
       method: 'POST',
-      body: { operate, ...(extra || {}) },
+      body: { operate },
     });
     toast(r && r.message ? r.message : `「${label}」操作已下发`, 'success');
     // 稍等片刻再刷新列表，让状态有时间更新
+    setTimeout(fetchApps, 1500);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    state.monitor.appOps[key] = false;
+  }
+}
+
+// 执行卸载（从 modal 确认）
+async function doUninstall() {
+  const app = state.monitor.uninstallApp;
+  if (!app) return;
+  const opts = state.monitor.uninstallOpts;
+  const key = app.id;
+  if (state.monitor.appOps[key]) return;
+  state.monitor.appOps[key] = true;
+  state.monitor.uninstallApp = null;
+  try {
+    const panel = state.panels.find((x) => x.id === state.monitorId);
+    const isV2 = panel && panel.version !== 'v1';
+    const extra = {
+      forceDelete: !!opts.forceDelete,
+      deleteBackup: !!opts.deleteBackup,
+    };
+    if (isV2) {
+      // V2 才支持 deleteImage / deleteDB / taskID
+      if (opts.deleteImage) extra.deleteImage = true;
+      // V2 默认勾选"删除关联数据库"
+      if (opts.deleteDB) extra.deleteDB = true;
+      extra.taskID = crypto.randomUUID();
+    }
+    const r = await api(`/api/panels/${state.monitorId}/apps/${app.id}/op`, {
+      method: 'POST',
+      body: { operate: 'uninstall', ...extra },
+    });
+    toast(r && r.message ? r.message : '卸载指令已下发', 'success');
     setTimeout(fetchApps, 1500);
   } catch (e) {
     toast(e.message, 'error');
@@ -745,7 +800,7 @@ const App = {
         list = list.filter((p) =>
           (p.name || '').toLowerCase().includes(q) ||
           (p.host || '').toLowerCase().includes(q) ||
-          (p._base?.ipV4Addr || '').toLowerCase().includes(q) ||
+          (p._base?.ipV4Addr || p._base?.ipv4Addr || '').toLowerCase().includes(q) ||
           (p.remark || '').toLowerCase().includes(q) ||
           (p.category || '').toLowerCase().includes(q)
         );
@@ -764,8 +819,8 @@ const App = {
       panelForm, openAddPanel, openEditPanel, savePanel,
       passwordForm, openSettings, changePassword,
       doLogin, doLogout,
-      fetchMonitor, fetchApps, operateApp, syncApps, openUpgrade, doUpgrade, colorFor,
-      appStatusText, appStatusClass, filteredApps, iconError,
+      fetchMonitor, fetchApps, operateApp, syncApps, openUpgrade, doUpgrade, doUninstall, colorFor,
+      appStatusText, appStatusClass, filteredApps, iconError, panelEntry,
       diskUsedPercent, lastOf, monOnline, monError, emptyList, currentMonitorName,
       categories, filteredPanels, noFilterResult, setCategory, setVersion, setStatus,
       saveUiSettings,
@@ -863,7 +918,7 @@ const App = {
             <div class="card-head">
               <div class="name">
                 {{ p.name }}
-                <span class="addr">{{ p.protocol }}://{{ p.host }}:{{ p.port }}{{ p.entry }}</span>
+                <span class="addr">{{ p.protocol }}://{{ p.host }}:{{ p.port }}{{ panelEntry(p.entry) }}</span>
               </div>
               <span class="badge" :class="p._online === true ? 'online' : (p._online === false ? 'offline' : 'unknown')">
                 <span class="dot"></span>{{ p._online === true ? '在线' : (p._online === false ? '离线' : '检测中') }}
@@ -873,6 +928,10 @@ const App = {
             </div>
 
             <div v-if="p._error" class="error-msg">{{ p._error }}</div>
+
+            <div v-if="p._noData" class="error-msg" :title="p._noDataHint">
+              该面板在线但 CPU/内存/磁盘数据未获取到（请到 1Panel 「监控」页面启用监控）
+            </div>
 
             <div v-if="p._current" class="occupancy">
               <div class="metric">
@@ -988,14 +1047,14 @@ const App = {
               <div class="host-grid">
                 <div class="host-item"><span class="hk">主机名</span><span class="hv">{{ state.monitor.data.base?.hostname || '-' }}</span></div>
                 <div class="host-item"><span class="hk">操作系统</span><span class="hv">{{ state.monitor.data.base?.os || state.monitor.data.os?.os || '-' }}</span></div>
-                <div class="host-item"><span class="hk">发行版</span><span class="hv">{{ state.monitor.data.base?.prettyDistro || state.monitor.data.os?.prettyDistro || '-' }}</span></div>
+                <div class="host-item"><span class="hk">发行版</span><span class="hv">{{ state.monitor.data.base?.prettyDistro || state.monitor.data.os?.prettyDistro || state.monitor.data.base?.platformVersion || '-' }}</span></div>
                 <div class="host-item"><span class="hk">内核</span><span class="hv">{{ state.monitor.data.base?.kernelVersion || state.monitor.data.os?.kernelVersion || '-' }}</span></div>
                 <div class="host-item"><span class="hk">架构</span><span class="hv">{{ state.monitor.data.base?.kernelArch || state.monitor.data.os?.kernelArch || '-' }}</span></div>
                 <div class="host-item"><span class="hk">平台</span><span class="hv">{{ state.monitor.data.base?.platform || state.monitor.data.os?.platform || '-' }}</span></div>
                 <div class="host-item"><span class="hk">CPU 型号</span><span class="hv">{{ state.monitor.data.base?.cpuModelName || '-' }}</span></div>
                 <div class="host-item"><span class="hk">CPU 核心</span><span class="hv">{{ state.monitor.data.base?.cpuCores || '-' }} 核</span></div>
-                <div class="host-item"><span class="hk">IP 地址</span><span class="hv">{{ state.monitor.data.base?.ipV4Addr || '-' }}</span></div>
-                <div class="host-item"><span class="hk">运行时长</span><span class="hv">{{ fmt.uptime(state.monitor.data.current?.runningTime) }}</span></div>
+                <div class="host-item"><span class="hk">IP 地址</span><span class="hv">{{ state.monitor.data.base?.ipV4Addr || state.monitor.data.base?.ipv4Addr || '-' }}</span></div>
+                <div class="host-item"><span class="hk">运行时长</span><span class="hv">{{ fmt.uptime(state.monitor.data.current?.runningTime || state.monitor.data.current?.uptime) }}</span></div>
               </div>
             </div>
 
@@ -1230,6 +1289,46 @@ const App = {
           <button class="btn" @click="state.monitor.upgradeApp = null">取消</button>
           <button class="btn btn-primary" :disabled="state.monitor.upgradeLoading || state.monitor.upgradeVersions.length === 0" @click="doUpgrade(state.monitor.upgradeApp, state.monitor.upgradeVersions[state.monitor.upgradeIndex])">
             确认升级
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 卸载确认弹窗 -->
+    <div v-if="state.monitor.uninstallApp" class="modal-mask" @click.self="state.monitor.uninstallApp = null">
+      <div class="modal">
+        <h2>卸载「{{ state.monitor.uninstallApp.name }}」</h2>
+        <div class="error-msg" style="margin-bottom:12px">
+          该操作会移除应用及其容器，请谨慎！{{ (state.panels.find(x => x.id === state.monitorId) || {}).version === 'v1' ? '（V1 面板）' : '（V2 面板）' }}
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="state.monitor.uninstallOpts.forceDelete" />
+            <span>强制卸载（忽略应用运行状态）</span>
+          </label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="state.monitor.uninstallOpts.deleteBackup" />
+            <span>同时删除备份</span>
+          </label>
+        </div>
+        <div class="field" v-if="(state.panels.find(x => x.id === state.monitorId) || {}).version !== 'v1'">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="state.monitor.uninstallOpts.deleteImage" />
+            <span>同时删除镜像（节省磁盘空间）</span>
+          </label>
+        </div>
+        <div class="field" v-if="(state.panels.find(x => x.id === state.monitorId) || {}).version !== 'v1'">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="state.monitor.uninstallOpts.deleteDB" />
+            <span>同时删除关联数据库（V2）</span>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" @click="state.monitor.uninstallApp = null">取消</button>
+          <button class="btn btn-danger" :disabled="state.monitor.appOps[state.monitor.uninstallApp.id]" @click="doUninstall">
+            确认卸载
           </button>
         </div>
       </div>
