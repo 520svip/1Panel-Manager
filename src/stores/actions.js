@@ -1,5 +1,5 @@
 // 业务操作函数（从原 app.js 迁移）
-import { api } from '@/api';
+import { api, getToken, setToken } from '@/api';
 import { panelsStore, monitorStore, toast } from '@/stores';
 
 // 并发限流：最多同时执行 limit 个任务，避免大量机器同时刷新造成连接风暴
@@ -175,7 +175,7 @@ export async function doLogin(password, onOk) {
   if (!password) return;
   try {
     const data = await api('/api/auth/login', { method: 'POST', body: { password } });
-    localStorage.setItem('pm_token', data.token);
+    setToken(data.token);
     onOk && onOk();
   } catch (e) {
     toast(e.message, 'error');
@@ -184,7 +184,7 @@ export async function doLogin(password, onOk) {
 
 export async function doLogout() {
   try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* ignore */ }
-  localStorage.removeItem('pm_token');
+  setToken('');
 }
 
 // ---- UI 设置持久化 ----
@@ -287,7 +287,7 @@ export async function fetchApps() {
   if (monitorStore.appsLoading) return;
   monitorStore.appsLoading = true;
   try {
-    const token = localStorage.getItem('pm_token') || '';
+    const token = getToken();
     const apps = (await api(`/api/panels/${id}/apps`)) || [];
     // <img> 无法带 Authorization 头，把会话 token 拼到图标 URL 上
     monitorStore.apps = apps.map((a) => {
@@ -380,6 +380,8 @@ export async function syncApps() {
 export async function openUpgrade(app) {
   monitorStore.upgradeApp = app;
   monitorStore.upgradeIndex = 0;
+  // 重置为默认选项：备份 + 拉取镜像勾选，删除旧镜像不勾
+  monitorStore.upgradeOpts = { backup: true, pullImage: true, deleteImage: false };
   if (app.updateVersions && app.updateVersions.length) {
     monitorStore.upgradeVersions = app.updateVersions;
     monitorStore.upgradeLoading = false;
@@ -404,6 +406,9 @@ export async function doUpgrade(app, version) {
   const key = app.id;
   if (monitorStore.appOps[key]) return;
   monitorStore.appOps[key] = true;
+  const panel = panelsStore.list.find((x) => x.id === monitorStore.id);
+  const isV2 = panel && panel.version !== 'v1';
+  const opts = monitorStore.upgradeOpts || {};
   try {
     const r = await api(`/api/panels/${monitorStore.id}/apps/${app.id}/op`, {
       method: 'POST',
@@ -412,9 +417,11 @@ export async function doUpgrade(app, version) {
         detailId: version.detailId,
         version: version.version,
         dockerCompose: version.dockerCompose || '',
-        backup: true,
-        pullImage: true,
-        deleteImage: true,
+        // 升级前备份 / 拉取镜像：V1、V2 均支持，按勾选发送
+        backup: opts.backup !== false,
+        pullImage: opts.pullImage !== false,
+        // 删除旧镜像：仅 V2 支持
+        ...(isV2 ? { deleteImage: opts.deleteImage === true } : {}),
       },
     });
     toast(r && r.message ? r.message : '升级已下发', 'success');

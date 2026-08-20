@@ -59,7 +59,7 @@
 import { ref, reactive, computed, onMounted, provide } from 'vue';
 import { useRouter } from 'vue-router';
 import { auth, isLoggedIn, panelsStore } from '@/stores';
-import { api, logout as apiLogout, checkAuth } from '@/api';
+import { api, logout as apiLogout, checkAuth, setToken } from '@/api';
 import { toast } from '@/stores';
 import {
   loadPanels, loadUiSettings, blankForm, savePanel, changePassword,
@@ -88,7 +88,7 @@ async function submitLogin() {
   if (!loginPassword.value) return;
   try {
     const data = await api('/api/auth/login', { method: 'POST', body: { password: loginPassword.value } });
-    localStorage.setItem('pm_token', data.token);
+    setToken(data.token);
     auth.token = data.token;
     loginPassword.value = '';
     loadPanels();
@@ -100,7 +100,7 @@ async function submitLogin() {
 
 async function submitLogout() {
   try { await apiLogout(); } catch { /* ignore */ }
-  localStorage.removeItem('pm_token');
+  setToken('');
   auth.token = '';
   router.push('/');
 }
@@ -146,7 +146,7 @@ onMounted(async () => {
       loadUiSettings();
     } else {
       auth.token = '';
-      localStorage.removeItem('pm_token');
+      setToken('');
     }
   }
 });

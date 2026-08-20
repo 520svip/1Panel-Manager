@@ -1,6 +1,6 @@
 // API 客户端封装
 
-const TOKEN_KEY = 'pm_token';
+export const TOKEN_KEY = '1pm_token';
 
 // 获取 token
 export function getToken() {
@@ -29,6 +29,12 @@ export async function api(path, { method = 'GET', body, headers = {}, signal } =
   const res = await fetch(path, opts);
   let json = null;
   try { json = await res.json(); } catch { /* 非 JSON */ }
+  // 会话失效（401）：登录接口除外（密码错误由调用方提示），
+  // 清除本地 token 并广播事件，触发全局登出并自动回到登录页。
+  if (res.status === 401 && !path.includes('/auth/login')) {
+    setToken('');
+    window.dispatchEvent(new CustomEvent('1pm:auth-expired'));
+  }
   if (!res.ok) {
     const msg = (json && json.message) || res.statusText || '请求失败';
     const err = new Error(msg);

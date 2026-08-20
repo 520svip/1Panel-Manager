@@ -8,7 +8,7 @@ import {
 import { createSession, validateSession, destroySession, hashPassword, verifyPassword } from './lib/auth.js';
 import {
   getSnapshot, getMonitorHistory, restart, buildPanelUrl,
-  getContainerCount, getSystemVersion, getInstalledApps, operateInstalledApp, getAppUpdateVersions, checkAppStoreUpdate, getAppIcon, syncAppStoreRemote, syncAppStoreLocal,
+  getContainerCount, getSystemVersion, getInstalledApps, getUpdatableApps, operateInstalledApp, getAppUpdateVersions, checkAppStoreUpdate, getAppIcon, syncAppStoreRemote, syncAppStoreLocal,
 } from './lib/panelApi.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -354,14 +354,11 @@ function extractVersions(data) {
   return [];
 }
 
-// 获取应用列表（自动检查更新：同步商店 → 拉列表 → 若全局有更新则逐个查版本）
+// 获取应用列表（自动检查更新：拉列表 → 检测可升级应用）
 app.get('/api/panels/:id/apps', requireAuth, async (req, res) => {
   const panel = getPanel(Number(req.params.id));
   if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
-  // 1. 触发应用商店对比更新，记下全局标志
-  let globalCanUpdate = false;
-  try { const cu = await checkAppStoreUpdate(panel); globalCanUpdate = cu.data?.canUpdate === true; } catch { /* ignore */ }
-  // 2. 拉取全量已安装应用
+  // 1. 拉取全量已安装应用
   const r = await getInstalledApps(panel);
   const items = r.ok ? (r.data?.items ?? []) : [];
   // 为每个应用附加图标地址：
@@ -381,13 +378,32 @@ app.get('/api/panels/:id/apps', requireAuth, async (req, res) => {
       it.iconUrl = `/api/panels/${req.params.id}/apps/${encodeURIComponent(appKey)}/icon`;
     }
   }
-  // 3. 若全局有更新，对所有应用逐个查可升级版本（canUpdate 字段不可靠，直接反向对比）
-  if (globalCanUpdate && items.length > 0) {
-    await mapLimit(items, 5, async (item) => {
+  // 3. 检测可升级应用
+  //    V2：installed/search + update:true + sync:false 直接返回可升级列表（官方用法，比 checkupdate 可靠）
+  //    V1：先 checkupdate 全局判断，为 true 再逐个反向对比
+  if (panel.version === 'v1') {
+    let globalCanUpdate = false;
+    try { const cu = await checkAppStoreUpdate(panel); globalCanUpdate = cu.data?.canUpdate === true; } catch { /* ignore */ }
+    if (globalCanUpdate && items.length > 0) {
+      await mapLimit(items, 5, async (item) => {
+        const v = await getAppUpdateVersions(panel, item.id, item.appDetailID || item.appDetailId);
+        const versions = v.ok ? extractVersions(v.data) : [];
+        item.canUpdate = versions.length > 0;
+        item.updateVersions = versions;
+      });
+    }
+  } else {
+    const up = await getUpdatableApps(panel);
+    const updatable = up.ok ? (up.data?.items ?? []) : [];
+    await mapLimit(updatable, 5, async (item) => {
       const v = await getAppUpdateVersions(panel, item.id, item.appDetailID || item.appDetailId);
       const versions = v.ok ? extractVersions(v.data) : [];
-      item.canUpdate = versions.length > 0;
-      item.updateVersions = versions;
+      const target = items.find((x) => String(x.id) === String(item.id));
+      if (target) {
+        // 版本列表为空时视为不可升级，避免"可升级但点开无版本"
+        target.canUpdate = versions.length > 0;
+        target.updateVersions = versions;
+      }
     });
   }
   res.json({

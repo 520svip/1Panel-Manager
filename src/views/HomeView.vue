@@ -124,6 +124,7 @@ import {
 } from '@/stores/actions';
 import { fetchMonitor } from '@/stores/actions';
 import { fmt, colorFor } from '@/utils/format';
+import { getToken } from '@/api';
 
 const router = useRouter();
 const appExpose = inject('appExpose', null);
@@ -183,7 +184,7 @@ let listTimer = null;
 function stopListRefresh() { if (listTimer) { clearTimeout(listTimer); listTimer = null; } }
 function scheduleListRefresh() {
   stopListRefresh();
-  const loggedIn = !!localStorage.getItem('pm_token');
+  const loggedIn = !!getToken();
   if (!(loggedIn && panelsStore.list.length > 0 && panelsStore.autoRefresh)) return;
   listTimer = setTimeout(async () => {
     listTimer = null;

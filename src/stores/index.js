@@ -1,9 +1,10 @@
 // 全局状态管理（轻量级：用 reactive + module singleton）
 import { reactive, computed } from 'vue';
+import { getToken, setToken } from '@/api';
 
 // 认证状态
 export const auth = reactive({
-  token: localStorage.getItem('pm_token') || '',
+  token: getToken(),
   user: null,
 });
 
@@ -11,9 +12,14 @@ export const isLoggedIn = computed(() => !!auth.token);
 
 export function setAuthToken(t) {
   auth.token = t || '';
-  if (t) localStorage.setItem('pm_token', t);
-  else localStorage.removeItem('pm_token');
+  setToken(t || '');
 }
+
+// 会话失效广播：任意业务接口返回 401 时（见 api 封装），
+// 清空内存登录态，App.vue 的 v-if 会自动切回登录页。
+window.addEventListener('1pm:auth-expired', () => {
+  auth.token = '';
+});
 
 // 面板列表状态
 export const panelsStore = reactive({
@@ -50,6 +56,8 @@ export const monitorStore = reactive({
   upgradeVersions: [],
   upgradeIndex: 0,
   upgradeLoading: false,
+  // 升级选项：升级前备份 / 拉取镜像 默认勾选（V1/V2 均支持）；删除旧镜像仅 V2，默认不勾
+  upgradeOpts: { backup: true, pullImage: true, deleteImage: false },
   uninstallApp: null,
   uninstallOpts: { forceDelete: false, deleteBackup: false, deleteImage: true, deleteDB: true },
 });

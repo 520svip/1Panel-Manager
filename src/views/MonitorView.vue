@@ -181,7 +181,7 @@
                     <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'start')" v-if="app.status.toLowerCase() !== 'running'">启动</button>
                     <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'stop')" v-if="app.status.toLowerCase() === 'running'">停止</button>
                     <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'restart')">重启</button>
-                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="openUpgrade(app)" v-if="app.canUpdate">升级</button>
+                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id] || app.status.toLowerCase() === 'upgrading'" @click="openUpgrade(app)" v-if="app.canUpdate">升级</button>
                     <button class="btn btn-sm btn-danger" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'uninstall')">卸载</button>
                   </div>
                 </div>
@@ -209,6 +209,24 @@
               {{ ver.version }}{{ i === 0 ? '（最新）' : '' }}
             </option>
           </select>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="monitorStore.upgradeOpts.backup" />
+            <span>升级前备份应用</span>
+          </label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="monitorStore.upgradeOpts.pullImage" />
+            <span>拉取新版本镜像</span>
+          </label>
+        </div>
+        <div class="field" v-if="!isV1Panel">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="monitorStore.upgradeOpts.deleteImage" />
+            <span>升级完成后删除旧镜像</span>
+          </label>
         </div>
       </template>
       <template #footer>
