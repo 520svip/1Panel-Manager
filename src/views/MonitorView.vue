@@ -1,0 +1,332 @@
+<template>
+  <div>
+    <div class="monitor-head">
+      <div class="title">
+        <button class="btn btn-sm btn-ghost" @click="back">← 返回</button>
+        <span>{{ currentMonitorName }}</span>
+        <span class="badge" :class="monOnline ? 'online' : 'offline'">
+          <span class="dot"></span>{{ monOnline ? '在线' : '离线' }}
+        </span>
+      </div>
+      <div class="controls" v-if="!monError">
+        <label>
+          <span class="switch">
+            <input type="checkbox" v-model="monitorStore.autoRefresh" @change="saveUiSettings" />
+            <span class="slider"></span>
+          </span>
+          自动刷新
+        </label>
+        <label>
+          间隔
+          <input type="number" min="1" v-model.number="monitorStore.interval" :disabled="!monitorStore.autoRefresh" @change="saveUiSettings" /> 秒
+        </label>
+        <button class="btn btn-sm" :disabled="monitorStore.loading" @click="fetchMonitor">立即刷新</button>
+      </div>
+    </div>
+
+    <div v-if="monError" class="empty" style="padding:60px 20px">
+      <div class="icon">🔌</div>
+      <h3>无法连接该面板</h3>
+      <p>{{ monError }}</p>
+    </div>
+
+    <template v-else>
+      <div class="tabs">
+        <button class="tab" :class="{ active: monitorStore.activeTab === 'home' }" @click="switchTab('home')">首页</button>
+        <button class="tab" :class="{ active: monitorStore.activeTab === 'apps' }" @click="switchTab('apps')">应用</button>
+      </div>
+
+      <!-- ===== 首页 Tab ===== -->
+      <div v-if="monitorStore.activeTab === 'home'">
+        <div v-if="monitorStore.stats" class="section">
+          <div class="section-title">面板概况</div>
+          <div class="stat-grid">
+            <div class="stat-card"><div class="k">网站</div><div class="v">{{ monitorStore.stats.websiteNumber ?? '-' }}</div></div>
+            <div class="stat-card"><div class="k">应用</div><div class="v">{{ monitorStore.stats.appInstalledNumber ?? '-' }}</div></div>
+            <div class="stat-card"><div class="k">数据库</div><div class="v">{{ monitorStore.stats.databaseNumber ?? '-' }}</div></div>
+            <div class="stat-card"><div class="k">容器</div><div class="v">{{ monitorStore.stats.containerNumber ?? '-' }}</div></div>
+            <div class="stat-card"><div class="k">面板版本</div><div class="v" style="font-size:16px">{{ monitorStore.stats.systemVersion || '-' }}</div></div>
+          </div>
+        </div>
+
+        <div v-if="monOnline">
+          <div class="section">
+            <div class="section-title">主机信息</div>
+            <div class="host-grid">
+              <div class="host-item"><span class="hk">主机名</span><span class="hv">{{ monitorStore.data?.base?.hostname || '-' }}</span></div>
+              <div class="host-item"><span class="hk">操作系统</span><span class="hv">{{ monitorStore.data?.base?.os || monitorStore.data?.os?.os || '-' }}</span></div>
+              <div class="host-item"><span class="hk">发行版</span><span class="hv">{{ monitorStore.data?.base?.prettyDistro || monitorStore.data?.os?.prettyDistro || monitorStore.data?.base?.platformVersion || '-' }}</span></div>
+              <div class="host-item"><span class="hk">内核</span><span class="hv">{{ monitorStore.data?.base?.kernelVersion || monitorStore.data?.os?.kernelVersion || '-' }}</span></div>
+              <div class="host-item"><span class="hk">架构</span><span class="hv">{{ monitorStore.data?.base?.kernelArch || monitorStore.data?.os?.kernelArch || '-' }}</span></div>
+              <div class="host-item"><span class="hk">平台</span><span class="hv">{{ monitorStore.data?.base?.platform || monitorStore.data?.os?.platform || '-' }}</span></div>
+              <div class="host-item"><span class="hk">CPU 型号</span><span class="hv">{{ monitorStore.data?.base?.cpuModelName || '-' }}</span></div>
+              <div class="host-item"><span class="hk">CPU 核心</span><span class="hv">{{ monitorStore.data?.base?.cpuCores || '-' }} 核</span></div>
+              <div class="host-item"><span class="hk">IP 地址</span><span class="hv">{{ monitorStore.data?.base?.ipV4Addr || monitorStore.data?.base?.ipv4Addr || '-' }}</span></div>
+              <div class="host-item"><span class="hk">运行时长</span><span class="hv">{{ fmt.uptime(monitorStore.data?.current?.runningTime || monitorStore.data?.current?.uptime) }}</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">实时指标 <span style="color:var(--muted);font-weight:400;font-size:12px" v-if="monitorStore.data?.current?.shotTime">采样于 {{ fmt.clock(monitorStore.data.current.shotTime) }}</span></div>
+            <div class="stat-grid">
+              <div class="stat-card">
+                <div class="k">CPU 使用率</div>
+                <div class="v" :style="{ color: colorFor(monitorStore.data?.current?.cpuUsedPercent) }">{{ fmt.pct(monitorStore.data?.current?.cpuUsedPercent) }}</div>
+                <div class="s">共 {{ monitorStore.data?.current?.cpuTotal ?? '-' }} 核</div>
+              </div>
+              <div class="stat-card">
+                <div class="k">内存使用率</div>
+                <div class="v" :style="{ color: colorFor(monitorStore.data?.current?.memoryUsedPercent) }">{{ fmt.pct(monitorStore.data?.current?.memoryUsedPercent) }}</div>
+                <div class="s">{{ fmt.bytes(monitorStore.data?.current?.memoryUsed) }} / {{ fmt.bytes(monitorStore.data?.current?.memoryTotal) }}</div>
+              </div>
+              <div class="stat-card">
+                <div class="k">负载 (1/5/15 分钟)</div>
+                <div class="v" style="font-size:16px">{{ fmt.num(monitorStore.data?.current?.load1) }} / {{ fmt.num(monitorStore.data?.current?.load5) }} / {{ fmt.num(monitorStore.data?.current?.load15) }}</div>
+                <div class="s">使用率 {{ fmt.pct(monitorStore.data?.current?.loadUsagePercent) }}</div>
+              </div>
+              <div class="stat-card">
+                <div class="k">网络（收 / 发）</div>
+                <div class="v" style="font-size:16px">{{ fmt.bytes(monitorStore.data?.current?.netBytesRecv) }} ↓</div>
+                <div class="s">{{ fmt.bytes(monitorStore.data?.current?.netBytesSent) }} ↑</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">磁盘</div>
+            <div class="disk-list">
+              <div v-for="(d, i) in monitorStore.data?.current?.diskData || []" :key="i" class="disk-item">
+                <span class="path">{{ d.path }}</span>
+                <div class="bar"><span :style="{ width: fmt.pct(d.usedPercent), background: colorFor(d.usedPercent) }"></span></div>
+                <span class="info">{{ fmt.pct(d.usedPercent) }} · {{ fmt.bytes(d.used) }} / {{ fmt.bytes(d.total) }}</span>
+              </div>
+              <div v-if="!(monitorStore.data?.current?.diskData || []).length" class="error-msg">无磁盘数据</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">历史趋势（最近 30 分钟）</div>
+            <div class="chart-grid">
+              <div class="chart-card">
+                <div class="cc-head"><span class="t">平均负载</span><span class="cur">{{ fmt.num(lastOf(monitorStore.data?.series?.load?.values)) }}</span></div>
+                <LineChart :values="monitorStore.data?.series?.load?.values" color="#f59e0b" :height="60" />
+              </div>
+              <div class="chart-card">
+                <div class="cc-head"><span class="t">CPU 使用率</span><span class="cur">{{ fmt.pct(lastOf(monitorStore.data?.series?.cpu?.values)) }}</span></div>
+                <LineChart :values="monitorStore.data?.series?.cpu?.values" color="#3b82f6" :height="60" />
+              </div>
+              <div class="chart-card">
+                <div class="cc-head"><span class="t">内存使用率</span><span class="cur">{{ fmt.pct(lastOf(monitorStore.data?.series?.memory?.values)) }}</span></div>
+                <LineChart :values="monitorStore.data?.series?.memory?.values" color="#8b5cf6" :height="60" />
+              </div>
+              <div class="chart-card">
+                <div class="cc-head"><span class="t">硬盘 IO</span><span class="cur">{{ fmt.bytes(diskIoCur) }}</span></div>
+                <LineChart :values="diskIoValues" color="#10b981" :height="60" />
+              </div>
+              <div class="chart-card">
+                <div class="cc-head"><span class="t">网络（收 + 发）</span><span class="cur">{{ fmt.bytes(netCur) }}</span></div>
+                <LineChart :values="netValues" color="#06b6d4" :height="60" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="!monitorStore.loading" class="empty">
+          <div class="icon">🔌</div>
+          <h3>无法连接该面板</h3>
+          <p>{{ monitorStore.data?.error || '请检查面板地址、端口与接口密钥' }}</p>
+        </div>
+      </div>
+
+      <!-- ===== 应用 Tab ===== -->
+      <div v-if="monitorStore.activeTab === 'apps'">
+        <div class="section">
+          <div class="app-toolbar">
+            <input class="app-search" v-model="monitorStore.appSearch" placeholder="搜索应用名称 / 端口 / 路径..." />
+            <div class="app-toolbar-actions">
+              <span class="count">{{ filteredApps.length }} / {{ monitorStore.apps.length }}</span>
+              <button class="btn btn-sm" :disabled="monitorStore.appsLoading" @click="fetchApps">刷新</button>
+              <button class="btn btn-sm" @click="syncApps">同步</button>
+            </div>
+          </div>
+          <div v-if="monitorStore.appsLoading" style="text-align:center;padding:40px;color:var(--muted)">加载中...</div>
+          <div v-else-if="monitorStore.apps.length === 0" class="empty" style="padding:40px">
+            <div class="icon">📦</div>
+            <h3>暂无已安装应用</h3>
+            <p>请前往 1Panel 面板的应用商店安装应用</p>
+          </div>
+          <div v-else-if="filteredApps.length === 0" class="empty" style="padding:40px">
+            <div class="icon">🔍</div>
+            <h3>没有匹配的应用</h3>
+            <p>试试调整搜索关键词</p>
+          </div>
+          <div v-else class="app-list">
+            <div v-for="app in filteredApps" :key="app.id" class="app-card" :class="{ 'has-update': app.canUpdate }">
+              <img v-if="app.iconUrl && !app.iconError" :src="app.iconUrl" class="app-icon" loading="lazy" alt="" @error="iconError(app)" />
+              <div v-else class="app-icon app-icon-placeholder">{{ (app.name || '?')[0] }}</div>
+              <div class="app-info">
+                <div class="app-name-row">
+                  <span class="app-name">{{ app.name }}</span>
+                  <span v-if="app.version" class="app-version">v{{ app.version }}</span>
+                  <span v-if="app.canUpdate" class="upgrade-badge">可升级</span>
+                </div>
+                <div class="app-meta-row">
+                  <span class="badge" :class="appStatusClass(app.status)"><span class="dot"></span>{{ appStatusText(app.status) }}</span>
+                  <span v-if="app.httpPort" class="port-tag">HTTP {{ app.httpPort }}</span>
+                  <span v-if="app.httpsPort" class="port-tag">HTTPS {{ app.httpsPort }}</span>
+                </div>
+                <div v-if="app.path" class="app-path" :title="app.path">📁 {{ app.path }}</div>
+                <div class="app-footer">
+                  <span v-if="app.createdAt" class="app-meta-text">创建于 {{ app.createdAt.slice(0, 10) }}</span>
+                  <div class="app-actions">
+                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'start')" v-if="app.status.toLowerCase() !== 'running'">启动</button>
+                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'stop')" v-if="app.status.toLowerCase() === 'running'">停止</button>
+                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'restart')">重启</button>
+                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="openUpgrade(app)" v-if="app.canUpdate">升级</button>
+                    <button class="btn btn-sm btn-danger" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'uninstall')">卸载</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- 应用升级弹窗 -->
+    <Modal v-if="monitorStore.upgradeApp" title="" @close="monitorStore.upgradeApp = null">
+      <template #default>
+        <h2>升级「{{ monitorStore.upgradeApp.name }}」</h2>
+        <div class="field">
+          <label>当前版本</label>
+          <div class="upgrade-current">v{{ monitorStore.upgradeApp.version }}</div>
+        </div>
+        <div class="field">
+          <label>选择目标版本</label>
+          <div v-if="monitorStore.upgradeLoading" style="text-align:center;padding:20px;color:var(--muted)">加载中...</div>
+          <div v-else-if="monitorStore.upgradeVersions.length === 0" class="error-msg">暂无可用升级版本</div>
+          <select v-else class="upgrade-select" v-model.number="monitorStore.upgradeIndex">
+            <option v-for="(ver, i) in monitorStore.upgradeVersions" :key="ver.detailId || i" :value="i">
+              {{ ver.version }}{{ i === 0 ? '（最新）' : '' }}
+            </option>
+          </select>
+        </div>
+      </template>
+      <template #footer>
+        <button class="btn" @click="monitorStore.upgradeApp = null">取消</button>
+        <button class="btn btn-primary" :disabled="monitorStore.upgradeLoading || monitorStore.upgradeVersions.length === 0" @click="doUpgrade(monitorStore.upgradeApp, monitorStore.upgradeVersions[monitorStore.upgradeIndex])">
+          确认升级
+        </button>
+      </template>
+    </Modal>
+
+    <!-- 卸载确认弹窗 -->
+    <UninstallModal
+      v-if="monitorStore.uninstallApp"
+      :app="monitorStore.uninstallApp"
+      :opts="monitorStore.uninstallOpts"
+      :is-v1="isV1Panel"
+      :busy="!!monitorStore.appOps[monitorStore.uninstallApp.id]"
+      @cancel="monitorStore.uninstallApp = null"
+      @confirm="doUninstall"
+    />
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, onUnmounted, watch, inject } from 'vue';
+import { useRouter } from 'vue-router';
+import LineChart from '@/components/LineChart.vue';
+import Modal from '@/components/Modal.vue';
+import UninstallModal from '@/components/UninstallModal.vue';
+import { monitorStore, panelsStore } from '@/stores';
+import {
+  fetchMonitor, fetchApps, operateApp, syncApps, openUpgrade, doUpgrade, doUninstall,
+  saveUiSettings,
+} from '@/stores/actions';
+import { fmt, colorFor, appStatusText, appStatusClass, lastOf } from '@/utils/format';
+import { iconError } from '@/stores/actions';
+
+const router = useRouter();
+const appExpose = inject('appExpose', null);
+
+const props = defineProps({ id: { type: [String, Number], default: null } });
+
+const monOnline = computed(() => monitorStore.data?.online === true);
+const monError = computed(() => monitorStore.data?.error || monitorStore.error || null);
+const currentMonitorName = computed(() => {
+  const p = panelsStore.list.find((x) => x.id === monitorStore.id);
+  return p ? p.name : '';
+});
+const filteredApps = computed(() => {
+  const q = (monitorStore.appSearch || '').trim().toLowerCase();
+  if (!q) return monitorStore.apps;
+  return monitorStore.apps.filter((a) =>
+    (a.name || '').toLowerCase().includes(q) ||
+    (a.appName || '').toLowerCase().includes(q) ||
+    (a.path || '').toLowerCase().includes(q) ||
+    String(a.httpPort || '').includes(q) ||
+    String(a.httpsPort || '').includes(q)
+  );
+});
+
+// 历史趋势：把双向指标（磁盘 IO 读/写、网络 收/发）合并为单条总吞吐线
+function combineSeries(a = [], b = []) {
+  const n = Math.max(a.length, b.length);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const x = a[i], y = b[i];
+    if (x != null && y != null) out.push(x + y);
+    else if (x != null) out.push(x);
+    else if (y != null) out.push(y);
+    else out.push(null);
+  }
+  return out;
+}
+
+const series = computed(() => monitorStore.data?.series || {});
+const diskIoValues = computed(() => combineSeries(series.value.io?.read, series.value.io?.write));
+const netValues = computed(() => combineSeries(series.value.network?.up, series.value.network?.down));
+const diskIoCur = computed(() => { const x = lastOf(diskIoValues.value); return x != null ? x : 0; });
+const netCur = computed(() => { const x = lastOf(netValues.value); return x != null ? x : 0; });
+const isV1Panel = computed(() => {
+  const p = panelsStore.list.find((x) => x.id === monitorStore.id);
+  return !!(p && p.version === 'v1');
+});
+
+function back() {
+  router.push('/');
+}
+
+function switchTab(tab) {
+  monitorStore.activeTab = tab;
+  if (tab === 'home') fetchMonitor();
+  else fetchApps();
+}
+
+let monitorTimer = null;
+function startMonitorRefresh() {
+  stopMonitorRefresh();
+  if (monitorStore.autoRefresh) {
+    monitorTimer = setInterval(() => fetchMonitor(), Math.max(1, monitorStore.interval) * 1000);
+  }
+}
+function stopMonitorRefresh() {
+  if (monitorTimer) { clearInterval(monitorTimer); monitorTimer = null; }
+}
+
+watch(() => monitorStore.interval, startMonitorRefresh);
+watch(() => monitorStore.autoRefresh, startMonitorRefresh);
+
+onMounted(() => {
+  const id = Number(props.id);
+  monitorStore.id = id;
+  monitorStore.data = null;
+  monitorStore.stats = null;
+  monitorStore.apps = [];
+  monitorStore.activeTab = 'home';
+  monitorStore.error = null;
+  fetchMonitor();
+  startMonitorRefresh();
+});
+onUnmounted(stopMonitorRefresh);
+</script>

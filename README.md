@@ -13,8 +13,9 @@
 - **多面板集中管理**：记录每台面板的「名称、协议、地址、端口、安全入口、面板版本（V1/V2）、接口密钥、备注、分类」。
 - **V1 / V2 兼容**：自动适配两套 API 的鉴权、路由、字段名差异（详见下方「V1 / V2 适配说明」）。
 - **一键打开面板**：以 `window.open` 在新标签页打开 1Panel 真实地址，规避跨站 iframe 的 Cookie 限制。
-- **实时资源监控**：接入 1Panel API，在首页卡片直接查看 CPU / 内存 / 磁盘占用。
-- **监控详情页**：查看主机信息、CPU / 内存 / 负载 / 网络、磁盘分区、最近 30 分钟历史趋势图。
+- **实时资源监控**：接入 1Panel API，在首页卡片直接查看 CPU / 内存 / 磁盘占用（带进度条）。
+- **监控详情页**：查看主机信息、CPU / 内存 / 负载 / 网络、磁盘分区等。
+- **历史趋势图表**：监控详情页「首页」Tab 以曲线图展示最近 30 分钟趋势，包含 **平均负载、CPU 使用率、内存使用率、硬盘 IO（读 + 写）、网络（收 + 发）** 五项，卡片自动平均铺满整行。
 - **在线状态检测**：实时展示每台面板的在线 / 离线状态。
 - **分类管理**：为机器设置分类，支持按分类快速筛选。
 - **搜索**：按名称 / IP / 备注 / 分类模糊搜索。
@@ -44,15 +45,24 @@
 ## 4. 安装与运行
 
 ```bash
-# 安装依赖（仅有 express）
+# 安装依赖
 npm install
 
-# 启动服务
+# 生产模式：直接用 Vite 构建好的产物（dist/）启动，单端口 3000
 npm start
 
-# 开发模式（文件改动自动重启）
+# 开发模式：同时启动后端（内部 3001）+ Vite 开发服务器（3000，带热更新）
 npm run dev
+
+# 构建前端（生成 dist/，生产模式由 server.js 直接托管）
+npm run build
 ```
+
+> **只需记住一个端口：3000。**
+> - 生产模式：`npm start` → Express 直接托管 `dist/`，监听 3000。
+> - 开发模式：`npm run dev` → Vite 监听 3000（浏览器访问的端口），后端 Express 在内部 3001 运行；Vite 会自动把 `/api` 请求反向代理到 3001。浏览器全程只与 3000 交互，**同源、零 CORS、无预检**。
+>
+> 前端使用 **Vite + Vue 3 单文件组件（SFC）** 方案。`src/` 下为组件化源码，`npm run build` 会进行压缩并按路由分包（Vue 运行时、首页、监控页各自独立 chunk，产物位于 `dist/`）。
 
 启动后访问：<http://localhost:3000>
 
@@ -62,8 +72,11 @@ npm run dev
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `PORT` | `3000` | 服务监听端口 |
+| `PORT` | `3000` | 对外访问端口（生产模式即 Express 端口；开发模式即 Vite 端口，你访问的就是它） |
+| `VITE_PORT` | `3000` | 开发模式 Vite 端口（应与 `PORT` 一致，浏览器访问此端口） |
+| `BACKEND_PORT` | `3001` | 开发模式内部后端端口（Vite 自动代理 `/api` 到这里，无需手动访问） |
 | `HOST` | `0.0.0.0` | 监听地址（仅本机访问可设 `127.0.0.1`） |
+| `CORS_ORIGINS` | _(空)_ | 跨域白名单（逗号分隔）；留空表示允许任意来源。通常无需设置 |
 | `DEFAULT_PASSWORD` | `admin123` | 首次启动时初始化的后台密码 |
 | `SESSION_TTL_HOURS` | `24` | 后台会话有效期（小时） |
 | `PANEL_TIMEOUT_MS` | `8000` | 请求 1Panel API 的超时（毫秒） |
@@ -162,12 +175,17 @@ npm run dev
 │   ├── db.js                 # SQLite 数据访问（node:sqlite，零编译依赖）
 │   ├── auth.js               # 后台登录鉴权与会话管理
 │   └── panelApi.js           # 1Panel API 客户端（V1/V2 签名、请求、字段适配）
-├── public/
-│   ├── index.html            # 前端入口
-│   ├── app.js                # Vue 3 单页应用
-│   ├── style.css             # 样式
-│   └── vendor/
-│       └── vue.global.prod.js  # 本地 Vue 3（无 CDN 依赖）
+├── src/                      # 前端源码（Vite + Vue 3 SFC）
+│   ├── main.js               # 入口（引入全局样式）
+│   ├── style.css             # 全局样式（由 Vite 打包）
+│   ├── App.vue               # 根组件（登录 / 顶栏）
+│   ├── router/               # vue-router（hash 路由，懒加载）
+│   ├── views/                # 页面视图（HomeView / MonitorView）
+│   ├── components/           # 通用组件（Modal / Toast / LineChart / ProgressBar 等）
+│   ├── stores/               # 轻量状态管理（reactive）+ 业务操作函数
+│   ├── api/                  # API 客户端封装
+│   └── utils/                # 格式化工具
+├── dist/                     # Vite 构建产物（npm run build 生成，已加入 .gitignore）
 ├── docs/
 │   ├── swagger/              # 1Panel Swagger 接口文档（v1doc.json / v2doc.json）
 │   └── images/               # README 界面截图

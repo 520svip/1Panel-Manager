@@ -15,6 +15,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'admin123';
+const isDev = process.env.NODE_ENV !== 'production';
+const VITE_PORT = Number(process.env.VITE_PORT) || 3000;
+const BACKEND_PORT = Number(process.env.BACKEND_PORT) || 3001;
 
 // 首次启动初始化默认密码
 if (!getSetting('password')) {
@@ -24,7 +27,38 @@ if (!getSetting('password')) {
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// CORS 处理：前端在开发模式（Vite 5173）或任意端口访问时，浏览器会对带
+// Content-Type: application/json 的请求发起 OPTIONS 预检。这里统一放行预检，
+// 并对所有响应加上 Access-Control-Allow-* 头，避免“只有预请求、真实请求被拦截”的问题。
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (ALLOWED_ORIGINS.length === 0) {
+    // 未显式配置时，允许任意来源（本工具通常自托管，便捷优先）
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
+// 开发模式下，Express 只作为纯后端，监听内部端口（默认 3001）。
+// 前端由 Vite（端口 3000）提供，Vite 会把 /api 等请求反向代理到本后端。
+// 这样浏览器全程只与 3000 交互，同源、零 CORS、无预检。
+// 生产模式下，Express 直接托管构建产物 dist/ 并监听 PORT（默认 3000）。
+// 前端静态资源统一由构建产物提供（样式等已由 Vite 打包进 dist）。
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// 实际监听端口：开发用 BACKEND_PORT（内部），生产用 PORT（对外）
+const LISTEN_PORT = isDev ? (Number(process.env.BACKEND_PORT) || 3001) : PORT;
 
 function requireAuth(req, res, next) {
   const auth = req.headers.authorization || '';
@@ -432,12 +466,18 @@ app.post('/api/panels/:id/apps/:installId/op', requireAuth, async (req, res) => 
 // SPA 回退（非 API 的 GET 请求返回 index.html）
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api/')) {
-    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    const html = isDev ? path.join(__dirname, 'index.html') : path.join(__dirname, 'dist', 'index.html');
+    return res.sendFile(html);
   }
   next();
 });
 
-app.listen(PORT, HOST, () => {
+app.listen(LISTEN_PORT, HOST, () => {
   const showHost = HOST === '0.0.0.0' || HOST === '::' ? 'localhost' : HOST;
-  console.log(`[1Panel Manager] 服务已启动：http://${showHost}:${PORT}`);
+  if (isDev) {
+    console.log(`[1Panel Manager] 后端已启动（内部端口）：http://${showHost}:${LISTEN_PORT}`);
+    console.log(`[1Panel Manager] 请在浏览器访问 Vite 开发服务器：http://${showHost}:${VITE_PORT}`);
+  } else {
+    console.log(`[1Panel Manager] 服务已启动：http://${showHost}:${PORT}`);
+  }
 });
