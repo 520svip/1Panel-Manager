@@ -178,7 +178,10 @@ npm run build
 1PanelManager/
 ├── start.js                  # 启动入口（加载 .env、自动处理 node:sqlite 实验标志）
 ├── server.js                 # Express 后端服务与路由
+├── vite.config.js            # Vite 配置（端口 / 代理 / 分包）
+├── index.html                # 前端 HTML 入口
 ├── package.json
+├── package-lock.json
 ├── .env                      # 环境配置（端口、密码、超时等，已加入 .gitignore）
 ├── .env.example              # 环境配置模板
 ├── .gitignore
@@ -186,20 +189,22 @@ npm run build
 │   ├── db.js                 # SQLite 数据访问（node:sqlite，零编译依赖）
 │   ├── auth.js               # 后台登录鉴权与会话管理
 │   └── panelApi.js           # 1Panel API 客户端（V1/V2 签名、请求、字段适配）
+├── public/
+│   └── favicon.svg           # 站点图标
 ├── src/                      # 前端源码（Vite + Vue 3 SFC）
 │   ├── main.js               # 入口（引入全局样式）
 │   ├── style.css             # 全局样式（由 Vite 打包）
 │   ├── App.vue               # 根组件（登录 / 顶栏）
 │   ├── router/               # vue-router（hash 路由，懒加载）
 │   ├── views/                # 页面视图（HomeView / MonitorView）
-│   ├── components/           # 通用组件（Modal / Toast / LineChart / ProgressBar 等）
+│   ├── components/           # 通用组件（Modal / Toast / LineChart / ProgressBar / PanelForm / SettingsModal / UninstallModal 等）
 │   ├── stores/               # 轻量状态管理（reactive）+ 业务操作函数
 │   ├── api/                  # API 客户端封装
 │   └── utils/                # 格式化工具
 ├── dist/                     # Vite 构建产物（npm run build 生成，已加入 .gitignore）
 ├── docs/
 │   ├── swagger/              # 1Panel Swagger 接口文档（v1doc.json / v2doc.json）
-│   └── images/               # README 界面截图
+│   └── images/               # README 界面截图 + 标题 banner
 └── data/                     # 运行时生成（panels.db，已加入 .gitignore）
 ```
 
