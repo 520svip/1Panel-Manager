@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="public/favicon.svg" width="48" height="48" alt="1Panel Manager Logo" style="vertical-align: middle" />
-  <span style="font-size: 2.2em; font-weight: 700; vertical-align: middle;">1Panel Manager</span>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-header-dark.svg">
+    <img src="docs/images/readme-header.svg" alt="1Panel Manager" width="372">
+  </picture>
 </p>
 
 一个基于 **Node.js + Vue 3 + SQLite** 的 [1Panel](https://github.com/1Panel-dev/1Panel) 面板集中管理工具。通过一个页面记录并管理多台 1Panel 面板（V1 / V2 混合），支持资源监控、批量状态查看、应用管理（启动/停止/重启/升级/卸载）与快捷跳转，手机端也能良好适配。
