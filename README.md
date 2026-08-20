@@ -205,6 +205,7 @@ npm run build
 ├── docs/
 │   ├── swagger/              # 1Panel Swagger 接口文档（v1doc.json / v2doc.json）
 │   └── images/               # README 界面截图 + 标题 banner
+├── dev/                      # 本地开发测试目录（测试数据 / 脚本等，已加入 .gitignore）
 └── data/                     # 运行时生成（panels.db，已加入 .gitignore）
 ```
 
