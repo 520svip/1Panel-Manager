@@ -7,7 +7,7 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', name: 'home', component: HomeView },
-    { path: '/monitor/:id', name: 'monitor', component: DashboardView, props: true },
+    { path: '/dashboard/:id', name: 'dashboard', component: DashboardView, props: true },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 });

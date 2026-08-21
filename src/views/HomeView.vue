@@ -176,7 +176,7 @@ function gotoMonitor(id) {
   monitorStore.stats = null;
   monitorStore.apps = [];
   monitorStore.activeTab = 'home';
-  router.push('/monitor/' + id);
+  router.push('/dashboard/' + id);
   fetchMonitor();
 }
 

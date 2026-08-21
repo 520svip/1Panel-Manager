@@ -52,6 +52,7 @@ export const monitorStore = reactive({
   appsLoading: false,
   appOps: {},
   appSearch: '',
+  appState: 'all',
   upgradeApp: null,
   upgradeVersions: [],
   upgradeIndex: 0,

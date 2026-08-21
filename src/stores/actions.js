@@ -450,17 +450,14 @@ export function diskUsedPercent(p) {
 }
 
 // ---- 容器 ----
-// 容器列表（state 筛选 + 名称搜索）
+// 容器列表（全量拉取，状态与名称由前端过滤）
 export async function fetchContainers() {
   const id = monitorStore.id;
   if (!id) return;
   if (monitorStore.containersLoading) return;
   monitorStore.containersLoading = true;
   try {
-    const qs = new URLSearchParams({ state: monitorStore.containerState || 'all' });
-    const kw = (monitorStore.containerSearch || '').trim();
-    if (kw) qs.set('name', kw);
-    const data = await api(`/api/panels/${id}/containers?${qs}`);
+    const data = await api(`/api/panels/${id}/containers`);
     monitorStore.containers = Array.isArray(data) ? data : (data?.items || []);
     // 拉取实时统计（CPU/内存）并按 containerID 合并到容器项
     await fetchContainerStats();
