@@ -217,6 +217,8 @@ npm run build
 │   ├── main.js               # 入口（引入全局样式）
 │   ├── style.css             # 全局样式（由 Vite 打包）
 │   ├── App.vue               # 根组件（登录 / 顶栏）
+│   ├── assets/
+│   │   └── icons/            # 前端图标资源（SVG：menu / add / settings / logout / chevron-down）
 │   ├── router/               # vue-router（hash 路由，懒加载）
 │   ├── views/                # 页面视图（HomeView / DashboardView）
 │   │   └── dashboard/         # 管理面板各页签组件（HomeTab / AppsTab / ContainersTab）

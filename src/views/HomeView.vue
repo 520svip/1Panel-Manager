@@ -5,27 +5,32 @@
         <input class="search-input" v-model="panelsStore.search" placeholder="搜索名称 / IP / 备注 / 分类" />
         <span class="count">共 {{ panelsStore.list.length }} 个</span>
         <span class="result-count" v-if="filteredPanels.length !== panelsStore.list.length">命中 {{ filteredPanels.length }}</span>
+        <button class="filter-toggle" :class="{ open: showFilters }" :title="showFilters ? '收起筛选' : '展开筛选'" @click="showFilters = !showFilters">
+          <span class="icon" v-html="icChevron"></span>
+        </button>
       </div>
 
-      <div class="filter-bar">
-        <div class="filter-group">
-          <span class="filter-label">版本</span>
-          <button class="chip" :class="{ active: panelsStore.activeVersion === 'all' }" @click="setVersion('all')">全部</button>
-          <button class="chip" :class="{ active: panelsStore.activeVersion === 'v1' }" @click="setVersion('v1')">V1</button>
-          <button class="chip" :class="{ active: panelsStore.activeVersion === 'v2' }" @click="setVersion('v2')">V2</button>
+      <transition name="fade-slide">
+        <div v-if="showFilters" class="filter-bar">
+          <div class="filter-group">
+            <span class="filter-label">版本</span>
+            <button class="chip" :class="{ active: panelsStore.activeVersion === 'all' }" @click="setVersion('all')">全部</button>
+            <button class="chip" :class="{ active: panelsStore.activeVersion === 'v1' }" @click="setVersion('v1')">V1</button>
+            <button class="chip" :class="{ active: panelsStore.activeVersion === 'v2' }" @click="setVersion('v2')">V2</button>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">状态</span>
+            <button class="chip" :class="{ active: panelsStore.activeStatus === 'all' }" @click="setStatus('all')">全部</button>
+            <button class="chip chip-online" :class="{ active: panelsStore.activeStatus === 'online' }" @click="setStatus('online')"><i class="dot"></i>在线</button>
+            <button class="chip chip-offline" :class="{ active: panelsStore.activeStatus === 'offline' }" @click="setStatus('offline')"><i class="dot"></i>离线</button>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">分类</span>
+            <button class="chip" :class="{ active: panelsStore.activeCategory === 'all' }" @click="setCategory('all')">全部</button>
+            <button v-for="c in categories" :key="c" class="chip" :class="{ active: panelsStore.activeCategory === c }" @click="setCategory(c)">{{ c }}</button>
+          </div>
         </div>
-        <div class="filter-group">
-          <span class="filter-label">状态</span>
-          <button class="chip" :class="{ active: panelsStore.activeStatus === 'all' }" @click="setStatus('all')">全部</button>
-          <button class="chip chip-online" :class="{ active: panelsStore.activeStatus === 'online' }" @click="setStatus('online')"><i class="dot"></i>在线</button>
-          <button class="chip chip-offline" :class="{ active: panelsStore.activeStatus === 'offline' }" @click="setStatus('offline')"><i class="dot"></i>离线</button>
-        </div>
-        <div class="filter-group">
-          <span class="filter-label">分类</span>
-          <button class="chip" :class="{ active: panelsStore.activeCategory === 'all' }" @click="setCategory('all')">全部</button>
-          <button v-for="c in categories" :key="c" class="chip" :class="{ active: panelsStore.activeCategory === c }" @click="setCategory(c)">{{ c }}</button>
-        </div>
-      </div>
+      </transition>
 
       <div class="toolbar-row toolbar-actions">
         <label class="ctrl-label">
@@ -99,11 +104,11 @@
           <div class="action-row">
             <button class="btn btn-primary btn-sm" @click="openPanel(p)">打开面板</button>
             <button class="btn btn-sm" @click="gotoMonitor(p.id)">管理面板</button>
-            <button class="btn btn-sm" :disabled="p._refreshing" @click="refreshPanel(p.id)">刷新</button>
             <button class="btn btn-sm" @click="restartPanel(p)" title="重启面板">重启面板</button>
             <button class="btn btn-sm btn-danger" @click="rebootPanel(p)" title="重启所在系统">重启系统</button>
           </div>
           <div class="action-row action-manage">
+            <button class="btn btn-sm" :disabled="p._refreshing" @click="refreshPanel(p.id)">刷新</button>
             <button class="btn btn-sm" @click="editPanel(p)">编辑</button>
             <button class="btn btn-sm btn-danger" @click="deletePanel(p)">删除</button>
           </div>
@@ -114,9 +119,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, watch, inject } from 'vue';
+import { computed, ref, onMounted, onUnmounted, watch, inject } from 'vue';
 import { useRouter } from 'vue-router';
 import ProgressBar from '@/components/ProgressBar.vue';
+import icChevron from '@/assets/icons/chevron-down.svg?raw';
 import { panelsStore, monitorStore } from '@/stores';
 import {
   loadPanels, refreshPanel, refreshAll, openPanel, restartPanel, rebootPanel, deletePanel,
@@ -128,6 +134,7 @@ import { getToken } from '@/api';
 
 const router = useRouter();
 const appExpose = inject('appExpose', null);
+const showFilters = ref(true);
 
 const emptyList = computed(() => panelsStore.list.length === 0 && !panelsStore.loading);
 const categories = computed(() => {

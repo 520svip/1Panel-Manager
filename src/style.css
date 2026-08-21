@@ -71,6 +71,27 @@ a { color: var(--primary); text-decoration: none; }
   font-size: 12.5px;
   line-height: 1.4;
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px; height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  transition: all .15s;
+}
+.hamburger:active { transform: scale(.94); }
+.hamburger.active { background: #f1f5f9; }
 
 /* ---------- 按钮 ---------- */
 .btn {
@@ -201,9 +222,9 @@ a { color: var(--primary); text-decoration: none; }
 .card-actions .action-row {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-.card-actions .action-manage { grid-template-columns: 1fr 1fr; }
+.card-actions .action-manage { grid-template-columns: 1fr 1fr 1fr; }
 .card-actions .action-row .btn { min-width: 0; padding: 6px 8px; justify-content: center; }
 .card-actions .action-row .btn:disabled { opacity: .5; }
 
@@ -327,6 +348,19 @@ a { color: var(--primary); text-decoration: none; }
   font-size: 12px; color: var(--primary); background: #eff6ff;
   padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
 }
+.filter-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: #fff; color: var(--muted);
+  cursor: pointer; flex-shrink: 0;
+  transition: all .15s;
+}
+.filter-toggle:hover { color: var(--primary); border-color: var(--primary); }
+.filter-toggle svg { transition: transform .2s; }
+.filter-toggle.open svg { transform: rotate(180deg); }
+.fade-slide-enter-active, .fade-slide-leave-active { transition: opacity .15s ease, transform .15s ease; }
+.fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateY(-6px); }
 
 .ctrl-label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .ctrl-label input[type="number"] { width: 56px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; }
@@ -688,13 +722,38 @@ a { color: var(--primary); text-decoration: none; }
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
   .form-row, .form-row-3 { grid-template-columns: 1fr; }
+  .topbar { position: relative; }
   .topbar .brand { gap: 10px; }
   .brand .logo { width: 38px; height: 38px; font-size: 17px; border-radius: 10px; }
   .brand-title { font-size: 17px; }
   .brand small { display: none; }
+  /* 汉堡菜单：logo 与汉堡同行，三个按钮收进下拉 */
+  .hamburger { display: inline-flex; margin-left: auto; }
+  .topbar-actions {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 30;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 180px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+  }
+  .topbar-actions.open {
+    display: flex;
+    animation: menu-in .16s ease;
+  }
+  .topbar-actions .btn { width: 100%; justify-content: center; }
   .disk-item { flex-wrap: wrap; }
   .disk-item .info { width: 100%; text-align: left; }
   .card-actions .action-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card-actions .action-manage { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .toolbar-actions { justify-content: stretch; flex-wrap: wrap; }
   .toolbar-actions .btn { margin-left: auto; }
   .filter-label { min-width: 28px; }
@@ -714,4 +773,8 @@ a { color: var(--primary); text-decoration: none; }
   .list-toolbar { padding: 12px; }
   .chip { padding: 5px 10px; font-size: 11.5px; }
   .filter-group { gap: 6px; }
+}
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }

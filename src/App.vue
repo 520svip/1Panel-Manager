@@ -25,9 +25,23 @@
           <small>集中管理多个 1Panel 面板</small>
         </span>
       </div>
-      <button class="btn btn-primary" @click="openAddPanel">+ 添加面板</button>
-      <button class="btn" @click="openSettings">设置</button>
-      <button class="btn btn-ghost" @click="submitLogout">退出</button>
+      <button class="hamburger" :class="{ active: menuOpen }" aria-label="菜单" @click="menuOpen = !menuOpen">
+        <span class="icon" v-html="icMenu"></span>
+      </button>
+      <div class="topbar-actions" :class="{ open: menuOpen }">
+        <button class="btn btn-primary" @click="openAddPanel">
+          <span class="icon" v-html="icAdd"></span>
+          添加面板
+        </button>
+        <button class="btn" @click="openSettings">
+          <span class="icon" v-html="icSettings"></span>
+          设置
+        </button>
+        <button class="btn" @click="submitLogout">
+          <span class="icon" v-html="icLogout"></span>
+          退出
+        </button>
+      </div>
     </div>
 
     <router-view
@@ -71,6 +85,10 @@ import {
 import PanelForm from '@/components/PanelForm.vue';
 import SettingsModal from '@/components/SettingsModal.vue';
 import Toast from '@/components/Toast.vue';
+import icMenu from '@/assets/icons/menu.svg?raw';
+import icAdd from '@/assets/icons/add.svg?raw';
+import icSettings from '@/assets/icons/settings.svg?raw';
+import icLogout from '@/assets/icons/logout.svg?raw';
 
 const router = useRouter();
 
@@ -78,6 +96,7 @@ const loginPassword = ref('');
 const showPanelForm = ref(false);
 const editingPanel = ref(null);
 const showSettings = ref(false);
+const menuOpen = ref(false);
 const panelForm = reactive(blankForm());
 const passwordForm = reactive({ oldPassword: '', newPassword: '', confirm: '' });
 
@@ -102,6 +121,7 @@ async function submitLogin() {
 }
 
 async function submitLogout() {
+  menuOpen.value = false;
   try { await apiLogout(); } catch { /* ignore */ }
   setToken('');
   auth.token = '';
@@ -119,6 +139,7 @@ async function submitChangePassword() {
 }
 
 function openAddPanel() {
+  menuOpen.value = false;
   Object.assign(panelForm, blankForm());
   editingPanel.value = null;
   showPanelForm.value = true;
@@ -134,6 +155,7 @@ function openEditPanel(p) {
 }
 
 function openSettings() {
+  menuOpen.value = false;
   passwordForm.oldPassword = '';
   passwordForm.newPassword = '';
   passwordForm.confirm = '';
