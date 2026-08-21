@@ -46,7 +46,7 @@ export const monitorStore = reactive({
   lastUpdate: null,
   interval: 3,
   autoRefresh: true,
-  activeTab: 'home', // home | apps
+  activeTab: 'home', // home | apps | containers
   // 应用相关
   apps: [],
   appsLoading: false,
@@ -60,6 +60,22 @@ export const monitorStore = reactive({
   upgradeOpts: { backup: true, pullImage: true, deleteImage: false },
   uninstallApp: null,
   uninstallOpts: { forceDelete: false, deleteBackup: false, deleteImage: true, deleteDB: true },
+  // 容器相关
+  containers: [],
+  containersLoading: false,
+  containerOps: {},
+  containerSearch: '',
+  containerState: 'all',
+  containerSelected: {},
+  // Docker 服务 / 镜像
+  dockerStatus: null,      // { isExist, isActive }
+  dockerOps: {},
+  pruneOps: {},
+  images: [],
+  imagesLoading: false,
+  imageOps: {},
+  imageSelected: {},
+  showImages: false,
 });
 
 // Toast 通知

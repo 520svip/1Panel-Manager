@@ -9,6 +9,9 @@ import { createSession, validateSession, destroySession, hashPassword, verifyPas
 import {
   getSnapshot, getMonitorHistory, restart, buildPanelUrl,
   getContainerCount, getSystemVersion, getInstalledApps, getUpdatableApps, operateInstalledApp, getAppUpdateVersions, checkAppStoreUpdate, getAppIcon, syncAppStoreRemote, syncAppStoreLocal,
+  searchContainers, operateContainers,
+  getDockerStatus, operateDocker, pruneDocker, listImages, removeImages,
+  listContainerStats,
 } from './lib/panelApi.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -475,6 +478,120 @@ app.post('/api/panels/:id/apps/:installId/op', requireAuth, async (req, res) => 
   res.json({
     code: r.ok ? 200 : 500,
     message: r.ok ? '操作已下发' : (r.message || '操作失败'),
+    data: r.data,
+  });
+});
+
+// ---------- 容器 ----------
+// 容器分页列表（支持 state / name 筛选）
+app.get('/api/panels/:id/containers', requireAuth, async (req, res) => {
+  const panel = getPanel(Number(req.params.id));
+  if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 200));
+  const body = {
+    page, pageSize, order: 'null', orderBy: 'name',
+    state: String(req.query.state || 'all'),
+  };
+  const name = String(req.query.name || '').trim();
+  if (name) body.name = name;
+  const r = await searchContainers(panel, body);
+  res.json({
+    code: r.ok ? 200 : 500,
+    message: r.ok ? null : (r.message || '获取容器列表失败'),
+    data: r.ok ? r.data : null,
+  });
+});
+
+// 容器批量操作（operation: start | stop | restart | remove 等）
+app.post('/api/panels/:id/containers/op', requireAuth, async (req, res) => {
+  const panel = getPanel(Number(req.params.id));
+  if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
+  const names = Array.isArray(req.body?.names) ? req.body.names.map(String).filter(Boolean) : [];
+  const operation = String(req.body?.operation || '');
+  if (!names.length || !operation) return res.status(400).json({ code: 400, message: '缺少容器或操作类型' });
+  const r = await operateContainers(panel, names, operation);
+  res.json({
+    code: r.ok ? 200 : 500,
+    message: r.ok ? '操作已下发' : (r.message || '操作失败'),
+    data: r.data,
+  });
+});
+
+// 容器实时统计（CPU/内存，按 containerID 关联容器列表）
+app.get('/api/panels/:id/containers/stats', requireAuth, async (req, res) => {
+  const panel = getPanel(Number(req.params.id));
+  if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
+  const r = await listContainerStats(panel);
+  res.json({
+    code: r.ok ? 200 : 500,
+    message: r.ok ? null : (r.message || '获取容器统计失败'),
+    data: r.ok ? r.data : null,
+  });
+});
+
+// Docker 服务状态（isExist / isActive）
+app.get('/api/panels/:id/docker/status', requireAuth, async (req, res) => {
+  const panel = getPanel(Number(req.params.id));
+  if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
+  const r = await getDockerStatus(panel);
+  res.json({
+    code: r.ok ? 200 : 500,
+    message: r.ok ? null : (r.message || '获取 Docker 状态失败'),
+    data: r.data,
+  });
+});
+
+// Docker 服务操作（operation: start | restart | stop）
+app.post('/api/panels/:id/docker/op', requireAuth, async (req, res) => {
+  const panel = getPanel(Number(req.params.id));
+  if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
+  const operation = String(req.body?.operation || '');
+  if (!operation) return res.status(400).json({ code: 400, message: '缺少操作类型' });
+  const r = await operateDocker(panel, operation);
+  res.json({
+    code: r.ok ? 200 : 500,
+    message: r.ok ? '操作已下发' : (r.message || '操作失败'),
+    data: r.data,
+  });
+});
+
+// 清理 Docker（pruneType: container | image | volume | network | buildcache）
+app.post('/api/panels/:id/containers/prune', requireAuth, async (req, res) => {
+  const panel = getPanel(Number(req.params.id));
+  if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
+  const pruneType = String(req.body?.pruneType || '');
+  if (!pruneType) return res.status(400).json({ code: 400, message: '缺少清理类型' });
+  const r = await pruneDocker(panel, pruneType);
+  res.json({
+    code: r.ok ? 200 : 500,
+    message: r.ok ? '清理已下发' : (r.message || '清理失败'),
+    data: r.data,
+  });
+});
+
+// 镜像列表
+app.get('/api/panels/:id/images', requireAuth, async (req, res) => {
+  const panel = getPanel(Number(req.params.id));
+  if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
+  const r = await listImages(panel);
+  res.json({
+    code: r.ok ? 200 : 500,
+    message: r.ok ? null : (r.message || '获取镜像列表失败'),
+    data: r.data,
+  });
+});
+
+// 删除镜像（names 数组，force 强制删除）
+app.post('/api/panels/:id/images/remove', requireAuth, async (req, res) => {
+  const panel = getPanel(Number(req.params.id));
+  if (!panel) return res.status(404).json({ code: 404, message: '面板不存在' });
+  const names = Array.isArray(req.body?.names) ? req.body.names.map(String).filter(Boolean) : [];
+  if (!names.length) return res.status(400).json({ code: 400, message: '缺少镜像' });
+  const r = await removeImages(panel, names, req.body?.force !== false);
+  res.json({
+    code: r.ok ? 200 : 500,
+    message: r.ok ? '删除已下发' : (r.message || '删除失败'),
     data: r.data,
   });
 });

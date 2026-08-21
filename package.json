@@ -19,6 +19,7 @@
     "dev": "concurrently -n backend,vite -c blue,green \"npm:dev:server\" \"npm:dev:vite\"",
     "dev:server": "node start.js",
     "dev:vite": "vite",
+    "stop": "node stop.js",
     "build": "vite build"
   },
   "engines": {

@@ -303,9 +303,9 @@ export async function fetchApps() {
   }
 }
 
-// 操作应用：start / stop / restart / uninstall（uninstall 会打开弹窗）
+// 操作应用：start / stop / restart / rebuild / uninstall（uninstall 会打开弹窗）
 export async function operateApp(app, operate) {
-  const labels = { start: '启动', stop: '停止', restart: '重启', uninstall: '卸载' };
+  const labels = { start: '启动', stop: '停止', restart: '重启', rebuild: '重建', uninstall: '卸载' };
   const label = labels[operate] || operate;
   if (operate === 'uninstall') {
     monitorStore.uninstallApp = app;
@@ -447,4 +447,182 @@ export function diskUsedPercent(p) {
   const total = disks.reduce((s, d) => s + (Number(d.total) || 0), 0);
   if (!total) return null;
   return (used / total) * 100;
+}
+
+// ---- 容器 ----
+// 容器列表（state 筛选 + 名称搜索）
+export async function fetchContainers() {
+  const id = monitorStore.id;
+  if (!id) return;
+  if (monitorStore.containersLoading) return;
+  monitorStore.containersLoading = true;
+  try {
+    const qs = new URLSearchParams({ state: monitorStore.containerState || 'all' });
+    const kw = (monitorStore.containerSearch || '').trim();
+    if (kw) qs.set('name', kw);
+    const data = await api(`/api/panels/${id}/containers?${qs}`);
+    monitorStore.containers = Array.isArray(data) ? data : (data?.items || []);
+    // 拉取实时统计（CPU/内存）并按 containerID 合并到容器项
+    await fetchContainerStats();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    monitorStore.containersLoading = false;
+  }
+}
+
+// 容器实时统计：V2 列表接口不返回 CPU/内存，需单独请求 /containers/list/stats 后合并
+export async function fetchContainerStats() {
+  const id = monitorStore.id;
+  if (!id) return;
+  if (!Array.isArray(monitorStore.containers) || !monitorStore.containers.length) return;
+  try {
+    const data = await api(`/api/panels/${id}/containers/stats`);
+    const list = Array.isArray(data) ? data : [];
+    const map = new Map(list.map((s) => [s.containerID, s]));
+    if (Array.isArray(monitorStore.containers) && monitorStore.containers.length) {
+      monitorStore.containers = monitorStore.containers.map((c) => {
+        const key = c.containerID || c.containerId || c.id;
+        const s = key && map.get(key);
+        return s ? { ...c, ...s } : c;
+      });
+    }
+  } catch (e) {
+    // 统计获取失败不影响容器列表展示
+  }
+}
+
+// 容器批量操作：start / stop / restart / remove / unpause
+export async function operateContainers(containers, operation) {
+  const labels = { start: '启动', stop: '停止', restart: '重启', remove: '删除', unpause: '恢复', kill: '强制停止', pause: '暂停' };
+  const label = labels[operation] || operation;
+  const list = (Array.isArray(containers) ? containers : [containers]).filter(Boolean);
+  const names = list.map((c) => c.name || c.id).filter(Boolean);
+  if (!names.length) return;
+  const desc = names.length === 1 ? `「${names[0]}」` : `${names.length} 个容器`;
+  const danger = operation === 'remove'
+    ? '\n\n删除容器将一并移除其容器层数据（挂载卷与网络除外），且无法恢复，请谨慎操作！'
+    : '';
+  if (!confirm(`确定要对 ${desc} 执行「${label}」操作吗？${danger}`)) return;
+  const key = names.length === 1 ? names[0] : `batch:${names.join('|')}`;
+  if (monitorStore.containerOps[key]) return;
+  monitorStore.containerOps[key] = true;
+  try {
+    const r = await api(`/api/panels/${monitorStore.id}/containers/op`, {
+      method: 'POST',
+      body: { names, operation },
+    });
+    toast(r && r.message ? r.message : `「${label}」操作已下发`, 'success');
+    // 稍等片刻再刷新列表，让状态有时间更新
+    setTimeout(fetchContainers, 1500);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    monitorStore.containerOps[key] = false;
+  }
+}
+
+// ---- Docker 服务 / 镜像 ----
+// Docker 服务状态
+export async function fetchDockerStatus() {
+  const id = monitorStore.id;
+  if (!id) return;
+  try {
+    monitorStore.dockerStatus = await api(`/api/panels/${id}/docker/status`);
+  } catch (e) {
+    monitorStore.dockerStatus = null;
+    toast(e.message, 'error');
+  }
+}
+
+// Docker 服务操作（start / restart / stop）
+export async function operateDocker(operation) {
+  const labels = { start: '启动', restart: '重启', stop: '停止' };
+  const label = labels[operation] || operation;
+  if (!confirm(`确定要「${label}」Docker 服务吗？`)) return;
+  if (monitorStore.dockerOps[operation]) return;
+  monitorStore.dockerOps[operation] = true;
+  try {
+    const r = await api(`/api/panels/${monitorStore.id}/docker/op`, {
+      method: 'POST',
+      body: { operation },
+    });
+    toast(r && r.message ? r.message : `Docker「${label}」指令已下发`, 'success');
+    setTimeout(() => { fetchDockerStatus(); fetchContainers(); }, 1500);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    monitorStore.dockerOps[operation] = false;
+  }
+}
+
+// 清理 Docker（pruneType: container | image）
+export async function pruneContainers(pruneType) {
+  const labels = { container: '清理未使用容器', image: '清理悬空镜像' };
+  const label = labels[pruneType] || pruneType;
+  if (!confirm(`确定要执行「${label}」吗？\n\n该操作会删除未使用/悬空的资源，且无法恢复，请谨慎操作！`)) return;
+  if (monitorStore.pruneOps[pruneType]) return;
+  monitorStore.pruneOps[pruneType] = true;
+  try {
+    const r = await api(`/api/panels/${monitorStore.id}/containers/prune`, {
+      method: 'POST',
+      body: { pruneType },
+    });
+    toast(r && r.message ? r.message : `「${label}」指令已下发`, 'success');
+    setTimeout(() => { fetchContainers(); if (monitorStore.showImages) fetchImages(); }, 2500);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    monitorStore.pruneOps[pruneType] = false;
+  }
+}
+
+// 镜像列表
+export async function fetchImages() {
+  const id = monitorStore.id;
+  if (!id) return;
+  if (monitorStore.imagesLoading) return;
+  monitorStore.imagesLoading = true;
+  try {
+    const data = await api(`/api/panels/${id}/images`);
+    monitorStore.images = Array.isArray(data) ? data : [];
+    monitorStore.imageSelected = {};
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    monitorStore.imagesLoading = false;
+  }
+}
+
+// 删除镜像
+export async function removeImages(list) {
+  const arr = (Array.isArray(list) ? list : [list]).filter(Boolean);
+  // 使用中的镜像禁止删除，直接跳过
+  const used = arr.filter((im) => im && im.isUsed);
+  if (used.length) toast(`已跳过 ${used.length} 个使用中的镜像`, 'warning');
+  const names = arr
+    .filter((im) => im && !im.isUsed)
+    .map((im) => im.id || im.imageId || im.imageID || (Array.isArray(im.tags) && im.tags[0] ? im.tags[0] : null))
+    .filter(Boolean);
+  if (!names.length) {
+    toast(used.length ? '没有可删除的镜像' : '无法获取镜像标识', 'error');
+    return;
+  }
+  const desc = names.length === 1 ? `「${names[0]}」` : `${names.length} 个镜像`;
+  if (!confirm(`确定要删除 ${desc} 吗？\n\n删除镜像后依赖它的容器将无法启动，请谨慎操作！`)) return;
+  const key = names.length === 1 ? names[0] : `batch:${names.join('|')}`;
+  if (monitorStore.imageOps[key]) return;
+  monitorStore.imageOps[key] = true;
+  try {
+    const r = await api(`/api/panels/${monitorStore.id}/images/remove`, {
+      method: 'POST',
+      body: { names, force: true },
+    });
+    toast(r && r.message ? r.message : '删除镜像指令已下发', 'success');
+    setTimeout(fetchImages, 1500);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    monitorStore.imageOps[key] = false;
+  }
 }

@@ -34,6 +34,7 @@
       <div class="tabs">
         <button class="tab" :class="{ active: monitorStore.activeTab === 'home' }" @click="switchTab('home')">首页</button>
         <button class="tab" :class="{ active: monitorStore.activeTab === 'apps' }" @click="switchTab('apps')">应用</button>
+        <button class="tab" :class="{ active: monitorStore.activeTab === 'containers' }" @click="switchTab('containers')">容器</button>
       </div>
 
       <!-- ===== 首页 Tab ===== -->
@@ -178,13 +179,116 @@
                 <div class="app-footer">
                   <span v-if="app.createdAt" class="app-meta-text">创建于 {{ app.createdAt.slice(0, 10) }}</span>
                   <div class="app-actions">
-                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'start')" v-if="app.status.toLowerCase() !== 'running'">启动</button>
-                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'stop')" v-if="app.status.toLowerCase() === 'running'">停止</button>
-                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'restart')">重启</button>
-                    <button class="btn btn-sm" :disabled="monitorStore.appOps[app.id] || app.status.toLowerCase() === 'upgrading'" @click="openUpgrade(app)" v-if="app.canUpdate">升级</button>
-                    <button class="btn btn-sm btn-danger" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'uninstall')">卸载</button>
+                    <button v-if="!appRunning(app) && !appTransient(app)" class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'start')">启动</button>
+                    <button v-if="(appRunning(app) || appSt(app) === 'unhealthy') && !appTransient(app)" class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'stop')">停止</button>
+                    <button v-if="!appTransient(app)" class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'restart')">重启</button>
+                    <button v-if="!appTransient(app)" class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'rebuild')">重建</button>
+                    <button v-if="app.canUpdate && !appTransient(app)" class="btn btn-sm" :disabled="monitorStore.appOps[app.id]" @click="openUpgrade(app)">升级</button>
+                    <button v-if="!appTransient(app)" class="btn btn-sm btn-danger" :disabled="monitorStore.appOps[app.id]" @click="operateApp(app, 'uninstall')">卸载</button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 容器 Tab ===== -->
+      <div v-if="monitorStore.activeTab === 'containers'">
+        <div class="section">
+          <!-- Docker 信息板块 -->
+          <div class="docker-card">
+            <div class="docker-info">
+              <div class="docker-icon">🐳</div>
+              <div>
+                <div class="docker-name-row">
+                  <span class="docker-name">Docker</span>
+                  <span class="badge" :class="dockerStatusClass"><span class="dot"></span>{{ dockerStatusText }}</span>
+                </div>
+                <div class="docker-meta">容器 {{ monitorStore.containers.length }} 个</div>
+              </div>
+            </div>
+            <div class="docker-actions">
+              <button v-if="dockerExist && !dockerActive" class="btn btn-sm" :disabled="dockerOpsAny" @click="operateDocker('start')">启动 Docker</button>
+              <template v-if="dockerExist && dockerActive">
+                <button class="btn btn-sm" :disabled="dockerOpsAny" @click="operateDocker('stop')">停止 Docker</button>
+                <button class="btn btn-sm" :disabled="dockerOpsAny" @click="operateDocker('restart')">重启 Docker</button>
+                <button class="btn btn-sm" :disabled="dockerOpsAny" @click="pruneContainers('container')">清理容器</button>
+                <button class="btn btn-sm" :disabled="dockerOpsAny" @click="pruneContainers('image')">清理镜像</button>
+                <button class="btn btn-sm" :disabled="dockerOpsAny" @click="openImages">查看镜像</button>
+              </template>
+            </div>
+          </div>
+
+          <div class="app-toolbar">
+            <input class="app-search" v-model="monitorStore.containerSearch" placeholder="搜索容器名称 / 镜像 / ID..." />
+            <div class="app-toolbar-actions">
+              <select class="state-select" v-model="monitorStore.containerState" @change="fetchContainers">
+                <option value="all">全部状态</option>
+                <option value="running">运行中</option>
+                <option value="exited">已停止</option>
+                <option value="paused">已暂停</option>
+                <option value="created">已创建</option>
+                <option value="dead">已失效</option>
+                <option value="restarting">重启中</option>
+                <option value="removing">删除中</option>
+              </select>
+              <span class="count">{{ filteredContainers.length }} / {{ monitorStore.containers.length }}</span>
+              <button class="btn btn-sm" :disabled="monitorStore.containersLoading" @click="fetchContainers">刷新</button>
+            </div>
+          </div>
+
+          <!-- 批量操作栏 -->
+          <div v-if="selectedContainers.length" class="batch-bar">
+            <span class="count">已选 {{ selectedContainers.length }} 个容器</span>
+            <button class="btn btn-sm" :disabled="containerOpsAny" @click="operateContainers(selectedContainers, 'start')">启动</button>
+            <button class="btn btn-sm" :disabled="containerOpsAny" @click="operateContainers(selectedContainers, 'stop')">停止</button>
+            <button class="btn btn-sm" :disabled="containerOpsAny" @click="operateContainers(selectedContainers, 'restart')">重启</button>
+            <button class="btn btn-sm btn-danger" :disabled="containerOpsAny" @click="operateContainers(selectedContainers, 'remove')">删除</button>
+            <button class="btn btn-sm btn-ghost" @click="clearContainerSelection">取消选择</button>
+          </div>
+
+          <div v-if="monitorStore.containersLoading" style="text-align:center;padding:40px;color:var(--muted)">加载中...</div>
+          <div v-else-if="monitorStore.containers.length === 0" class="empty" style="padding:40px">
+            <div class="icon">🐳</div>
+            <h3>暂无容器</h3>
+            <p>当前筛选条件下没有容器</p>
+          </div>
+          <div v-else-if="filteredContainers.length === 0" class="empty" style="padding:40px">
+            <div class="icon">🔍</div>
+            <h3>没有匹配的容器</h3>
+            <p>试试调整搜索关键词</p>
+          </div>
+          <div v-else class="app-list">
+            <div
+              v-for="c in filteredContainers"
+              :key="c.id || c.name"
+              class="app-card container-card"
+              :class="{ selected: monitorStore.containerSelected[c.name] }"
+              @click="toggleContainer(c)"
+            >
+              <input type="checkbox" class="container-check" :checked="!!monitorStore.containerSelected[c.name]" @click.stop="toggleContainer(c)" />
+              <div class="container-main">
+                <div class="app-name-row">
+                  <span class="app-name">{{ c.name }}</span>
+                  <span class="badge" :class="containerStateClass(c.state)"><span class="dot"></span>{{ containerStateText(c.state) }}</span>
+                </div>
+                <div class="container-meta">
+                  <span v-if="c.imageName || c.image" class="container-image" :title="c.imageName || c.image">📦 {{ c.imageName || c.image }}</span>
+                  <span v-if="c.runTime || c.status" class="container-status">{{ c.runTime || c.status }}</span>
+                  <span v-if="containerPortsText(c)" class="port-tag" :title="containerPortsText(c)">{{ containerPortsText(c) }}</span>
+                </div>
+                <div class="container-stats">
+                  <span class="stat-item" :style="{ color: cpuColor(c) }">CPU {{ cpuText(c) }}</span>
+                  <span class="stat-item" :style="{ color: memColor(c) }">内存 {{ containerMemoryText(c) }}</span>
+                </div>
+              </div>
+              <div class="app-actions container-actions" @click.stop>
+                <button class="btn btn-sm" :disabled="monitorStore.containerOps[c.name] || containerOpsAny" @click="operateContainers(c, 'start')" v-if="c.state !== 'running' && c.state !== 'paused'">启动</button>
+                <button class="btn btn-sm" :disabled="monitorStore.containerOps[c.name] || containerOpsAny" @click="operateContainers(c, 'unpause')" v-if="c.state === 'paused'">恢复</button>
+                <button class="btn btn-sm" :disabled="monitorStore.containerOps[c.name] || containerOpsAny" @click="operateContainers(c, 'stop')" v-if="c.state === 'running'">停止</button>
+                <button class="btn btn-sm" :disabled="monitorStore.containerOps[c.name] || containerOpsAny" @click="operateContainers(c, 'restart')">重启</button>
+                <button class="btn btn-sm btn-danger" :disabled="monitorStore.containerOps[c.name] || containerOpsAny" @click="operateContainers(c, 'remove')">删除</button>
               </div>
             </div>
           </div>
@@ -247,6 +351,36 @@
       @cancel="monitorStore.uninstallApp = null"
       @confirm="doUninstall"
     />
+
+    <!-- 镜像列表弹窗 -->
+    <Modal v-if="monitorStore.showImages" title="镜像列表" @close="monitorStore.showImages = false">
+      <template #default>
+        <div class="image-toolbar">
+          <span class="count">已选 {{ selectedImages.length }} / {{ monitorStore.images.length }} 个镜像</span>
+          <button class="btn btn-sm btn-danger" :disabled="selectedImages.length === 0 || imageOpsAny" @click="removeImages(selectedImages)">删除所选</button>
+        </div>
+        <div v-if="monitorStore.imagesLoading" style="text-align:center;padding:30px;color:var(--muted)">加载中...</div>
+        <div v-else-if="monitorStore.images.length === 0" class="empty" style="padding:30px">
+          <div class="icon">🖼️</div>
+          <h3>暂无镜像</h3>
+          <p>当前面板下没有可用镜像</p>
+        </div>
+        <div v-else class="image-list">
+          <div v-for="(im, i) in monitorStore.images" :key="im.id || im.imageId || i" class="image-row" :class="{ selected: monitorStore.imageSelected[im.id || im.imageId], disabled: im.isUsed }">
+            <input type="checkbox" class="container-check" v-model="monitorStore.imageSelected[im.id || im.imageId]" :disabled="im.isUsed" :title="im.isUsed ? '使用中的镜像不可删除' : ''" />
+            <div class="image-info">
+              <div class="image-tags" :title="imageTags(im)">{{ imageTags(im) }}</div>
+              <div class="image-meta">
+                {{ fmt.bytes(im.size) }}
+                <template v-if="im.createdAt"> · {{ fmt.clock(im.createdAt) }}</template>
+                <template v-if="im.isUsed"> · <span class="used-tag">使用中</span></template>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-danger" :disabled="im.isUsed || monitorStore.imageOps[im.id || im.imageId]" @click="removeImages([im])">{{ im.isUsed ? '使用中' : '删除' }}</button>
+          </div>
+        </div>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -259,9 +393,10 @@ import UninstallModal from '@/components/UninstallModal.vue';
 import { monitorStore, panelsStore } from '@/stores';
 import {
   fetchMonitor, fetchApps, operateApp, syncApps, openUpgrade, doUpgrade, doUninstall,
-  saveUiSettings,
+  fetchContainers, fetchContainerStats, operateContainers, saveUiSettings,
+  fetchDockerStatus, operateDocker, pruneContainers, fetchImages, removeImages,
 } from '@/stores/actions';
-import { fmt, colorFor, appStatusText, appStatusClass, lastOf } from '@/utils/format';
+import { fmt, colorFor, appStatusText, appStatusClass, lastOf, containerStateText, containerStateClass, containerPortsText, containerCpuPercent, containerMemoryText, containerMemoryPercent } from '@/utils/format';
 import { iconError } from '@/stores/actions';
 
 const router = useRouter();
@@ -286,6 +421,72 @@ const filteredApps = computed(() => {
     String(a.httpsPort || '').includes(q)
   );
 });
+// 应用状态辅助：stable 稳定态 / transient 过渡态（任务执行中）
+const transientAppStates = ['creating', 'installing', 'uninstalling', 'rebuilding', 'upgrading', 'restarting', 'stopping', 'starting', 'deleting'];
+function appSt(app) { return (app.status || '').toLowerCase(); }
+function appTransient(app) { return transientAppStates.includes(appSt(app)); }
+function appRunning(app) { return appSt(app) === 'running'; }
+
+const filteredContainers = computed(() => {
+  const q = (monitorStore.containerSearch || '').trim().toLowerCase();
+  if (!q) return monitorStore.containers;
+  return monitorStore.containers.filter((c) =>
+    (c.name || '').toLowerCase().includes(q) ||
+    (c.imageName || c.image || '').toLowerCase().includes(q) ||
+    String(c.id || '').toLowerCase().includes(q)
+  );
+});
+const selectedContainers = computed(() =>
+  monitorStore.containers.filter((c) => monitorStore.containerSelected[c.name])
+);
+const containerOpsAny = computed(() => Object.values(monitorStore.containerOps).some(Boolean));
+
+// Docker 服务
+const dockerExist = computed(() => !!monitorStore.dockerStatus?.isExist);
+const dockerActive = computed(() => !!monitorStore.dockerStatus?.isActive);
+const dockerStatusText = computed(() => {
+  if (!monitorStore.dockerStatus) return '未知';
+  if (!dockerExist.value) return '未安装';
+  return dockerActive.value ? '运行中' : '已停止';
+});
+const dockerStatusClass = computed(() => {
+  if (!dockerExist.value) return 'offline';
+  return dockerActive.value ? 'online' : 'warning';
+});
+const dockerOpsAny = computed(() => Object.values(monitorStore.dockerOps).some(Boolean) || Object.values(monitorStore.pruneOps).some(Boolean));
+
+// 容器 CPU / 内存展示
+function cpuText(c) {
+  return fmt.cpuPct(containerCpuPercent(c));
+}
+function cpuColor(c) {
+  return colorFor(containerCpuPercent(c));
+}
+function memColor(c) {
+  return colorFor(containerMemoryPercent(c));
+}
+
+// 镜像
+const selectedImages = computed(() => monitorStore.images.filter((im) => !im.isUsed && monitorStore.imageSelected[im.id || im.imageId]));
+const imageOpsAny = computed(() => Object.values(monitorStore.imageOps).some(Boolean));
+function imageTags(im) {
+  const t = im.tags;
+  if (Array.isArray(t) && t.length) return t.join(', ');
+  if (typeof t === 'string' && t) return t;
+  const id = im.id || im.imageId || '';
+  return id ? `${String(id).slice(0, 19)}…` : '未命名镜像';
+}
+function openImages() {
+  monitorStore.showImages = true;
+  fetchImages();
+}
+
+function toggleContainer(c) {
+  monitorStore.containerSelected[c.name] = !monitorStore.containerSelected[c.name];
+}
+function clearContainerSelection() {
+  monitorStore.containerSelected = {};
+}
 
 // 历史趋势：把双向指标（磁盘 IO 读/写、网络 收/发）合并为单条总吞吐线
 function combineSeries(a = [], b = []) {
@@ -318,14 +519,18 @@ function back() {
 function switchTab(tab) {
   monitorStore.activeTab = tab;
   if (tab === 'home') fetchMonitor();
-  else fetchApps();
+  else if (tab === 'apps') fetchApps();
+  else if (tab === 'containers') { fetchDockerStatus(); fetchContainers(); }
 }
 
 let monitorTimer = null;
 function startMonitorRefresh() {
   stopMonitorRefresh();
   if (monitorStore.autoRefresh) {
-    monitorTimer = setInterval(() => fetchMonitor(), Math.max(1, monitorStore.interval) * 1000);
+    monitorTimer = setInterval(() => {
+      if (monitorStore.activeTab === 'home') fetchMonitor();
+      else if (monitorStore.activeTab === 'containers') fetchContainerStats();
+    }, Math.max(1, monitorStore.interval) * 1000);
   }
 }
 function stopMonitorRefresh() {
@@ -341,6 +546,13 @@ onMounted(() => {
   monitorStore.data = null;
   monitorStore.stats = null;
   monitorStore.apps = [];
+  monitorStore.containers = [];
+  monitorStore.containerSelected = {};
+  monitorStore.containerSearch = '';
+  monitorStore.containerState = 'all';
+  monitorStore.dockerStatus = null;
+  monitorStore.images = [];
+  monitorStore.showImages = false;
   monitorStore.activeTab = 'home';
   monitorStore.error = null;
   fetchMonitor();
