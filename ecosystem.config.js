@@ -1,4 +1,5 @@
-// PM2 进程管理配置（cluster 模式，4 个 Node 实例共享同一端口）
+// PM2 进程管理配置（单实例 fork 模式）
+// 会话存于进程内存，单实例下无多进程共享问题，最简单稳定。
 // 使用：pm2 start ecosystem.config.js  /  pm2 logs 1panel-manager  /  pm2 reload ecosystem.config.js
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -24,11 +25,10 @@ export const apps = [
     name: '1panel-manager',
     cwd: __dirname,
     script: 'start.js',
-    exec_mode: 'cluster',
-    instances: 4,            // 启动 4 个 Node 实例，共享同一监听端口
+    exec_mode: 'fork',
     autorestart: true,
     max_memory_restart: '300M',
-    merge_logs: true,        // 多实例日志合并写入同一文件
+    merge_logs: true,
     out_file: path.join(__dirname, 'logs', 'out.log'),
     error_file: path.join(__dirname, 'logs', 'error.log'),
     log_date_format: 'YYYY-MM-DD HH:mm:ss.SSS',
