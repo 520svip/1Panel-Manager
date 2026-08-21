@@ -69,6 +69,9 @@ npm start
 # 开发模式：同时启动后端（内部 3001）+ Vite 开发服务器（3000，带热更新）
 npm run dev
 
+# 测试 / 演示模式：与生产一样托管 dist/、监听对外端口，但 API Key 打掩码、禁止改密
+npm run test
+
 # 停止残留进程：结束占用 3000 / 3001 端口的进程（端口被占用无法启动时使用），可追加端口参数
 npm run stop
 npm run stop -- 8080
@@ -85,12 +88,41 @@ npm run build
 
 启动后访问：<http://localhost:3000>
 
+### PM2 部署（生产环境，多进程）
+
+使用 PM2 以 cluster 模式启动 4 个 Node 实例，共享同一端口（默认 3000），日志输出到 `logs/` 目录（已加入 `.gitignore`，不会上传仓库）。
+
+```bash
+# 首次使用需全局安装 PM2
+npm i -g pm2
+
+# 构建前端产物（dist/）
+npm run build
+
+# 启动 / 重启 / 热重载 / 停止
+npm run pm2:start       # 等价于 pm2 start ecosystem.config.js
+npm run pm2:restart     # 硬重启：全部实例同时停掉再拉起（有短暂中断）
+npm run pm2:reload      # 零停机热重载：逐个重启实例（推荐用于代码更新后）
+npm run pm2:stop
+
+# 查看实时日志（logs/out.log、logs/error.log）
+npm run pm2:logs
+npm run pm2:monit       # 进程面板（CPU / 内存 / 请求数）
+```
+
+> 说明：
+> - `ecosystem.config.js` 已根据当前 Node 版本自动判断是否需要 `--experimental-sqlite` 标志（22.5 ~ 22.12 需要，22.13+ 无需），无需手动配置。
+> - 所有环境变量（含 `NODE_ENV`）统一从 `.env` 读取，`ecosystem.config.js` 不再内置环境变量；`npm run dev` 会自动以 `NODE_ENV=development` 启动，生产模式（PM2 / `npm start`）使用 `.env` 中的 `production`。
+> - 4 个实例共享一个 SQLite 数据库（WAL 模式 + 5s 锁等待），写操作（登录、增删改面板等）并发安全。
+> - 生产模式必须构建 `dist/` 后启动（`NODE_ENV=production` 时 Express 直接托管 `dist/`）。
+
 ### 环境变量配置
 
 项目根目录下的 `.env` 文件（可参考 `.env.example` 创建）用于配置服务：
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
+| `NODE_ENV` | `production` | 运行环境：`production` 生产 / `development` 开发 / `test` 测试演示（见下方说明） |
 | `PORT` | `3000` | 对外访问端口（生产模式即 Express 端口；开发模式即 Vite 端口，你访问的就是它） |
 | `VITE_PORT` | `3000` | 开发模式 Vite 端口（应与 `PORT` 一致，浏览器访问此端口） |
 | `BACKEND_PORT` | `3001` | 开发模式内部后端端口（Vite 自动代理 `/api` 到这里，无需手动访问） |
@@ -103,6 +135,13 @@ npm run build
 > 配置优先级：**命令行环境变量 > `.env` 文件 > 默认值**。例如 `PORT=8080 npm start` 会覆盖 `.env` 中的 `PORT`。
 >
 > 使用 Node.js 内置的 `process.loadEnvFile` 加载，无需额外安装 dotenv。
+
+**测试 / 演示模式（`NODE_ENV=test`，或直接 `npm run test`）**：与生产模式一样托管 `dist/` 并监听对外端口，适用于部署在可对外访问的服务器上做功能演示，额外提供以下保护：
+>
+> - **API Key 掩码**：所有面板的接口密钥在接口返回时打掩码（如 `abc**********890`），**不可还原**，演示时不会泄露真实密钥。
+> - **默认密码提示**：登录页显示当前默认密码（`/api/meta` 返回），访客可直接登录体验。
+> - **禁止修改密码**：保持默认密码恒定，避免演示期间被改掉导致无法登录。
+> - **防误写保护**：编辑面板时密钥输入框不会回填掩码值，留空保存即保留原密钥；后端在收到掩码形式的密钥时也会自动保留原值，防止掩码被误写回数据库。
 
 **默认后台密码：`admin123`**（仅当数据库首次初始化时生效，之后请在「设置」中修改）。
 
@@ -304,6 +343,7 @@ npm run build
 - **API 路径不含安全入口**：本工具请求 1Panel API 时**不会**在 URL 中拼接「安全入口」（仅打开面板网页时才用），无需在面板配置中纠结 entry 字段。
 - **容器 CPU 显示**：1Panel 返回的 `cpuPercent` 是按增量计算的占比，空闲容器常见 `0.000x%` 级别的小值。本工具按量级自适应精度显示（`~0%` / `0.0038%` / `1.64%`），避免小值被四舍五入成 `0.0%` 造成「数据没取到」的误解。
 - **端口被占用**：若 `npm run dev` 提示 `EADDRINUSE`，多半是残留的 Node 进程占用了 3000 / 3001 端口，执行 `npm run stop` 即可清理。
+- **API Key 掩码与防误写**：测试 / 演示模式（`NODE_ENV=test`）下面板 API Key 以掩码形式返回（不可还原）；编辑面板时密钥输入框留空（提示「留空则保留原密钥」），保存时后端也会识别掩码值并自动保留原密钥，杜绝把掩码误写回数据库。
 
 ---
 

@@ -5,6 +5,10 @@
       <div class="logo-lg">1PM</div>
       <h1>1Panel Manager</h1>
       <p>集中管理多个 1Panel 面板</p>
+      <div v-if="metaEnv?.test" class="login-hint">
+        <p>当前为测试演示环境，账号数据为演示数据</p>
+        <p>默认密码：<code>{{ metaEnv.defaultPassword }}</code></p>
+      </div>
       <form @submit.prevent="submitLogin">
         <div class="field">
           <label>后台密码</label>
@@ -56,6 +60,7 @@
       :form="panelForm"
       :editing="editingPanel"
       :categories="categories"
+      :test="metaEnv?.test"
       @cancel="showPanelForm = false"
       @save="submitSavePanel"
     />
@@ -64,6 +69,7 @@
     <SettingsModal
       v-if="showSettings"
       :password-form="passwordForm"
+      :test="metaEnv?.test"
       @cancel="showSettings = false"
       @save="submitChangePassword"
     />
@@ -93,6 +99,7 @@ import icLogout from '@/assets/icons/logout.svg?raw';
 const router = useRouter();
 
 const loginPassword = ref('');
+const metaEnv = ref(null);
 const showPanelForm = ref(false);
 const editingPanel = ref(null);
 const showSettings = ref(false);
@@ -146,6 +153,8 @@ function openAddPanel() {
 }
 
 function openEditPanel(p) {
+  // 回填接口返回的 api_key（测试/演示环境下为掩码值，便于识别原密钥的起始段）。
+  // 掩码不会误写回数据库：后端 updatePanel 会识别掩码并保留原密钥。
   Object.assign(panelForm, {
     name: p.name, protocol: p.protocol, host: p.host, port: p.port,
     entry: p.entry, version: p.version, apiKey: p.api_key, remark: p.remark, category: p.category || '',
@@ -163,6 +172,12 @@ function openSettings() {
 }
 
 onMounted(async () => {
+  // 获取运行环境信息（测试演示环境时前端展示默认密码等提示）
+  try {
+    const meta = await api('/api/meta');
+    metaEnv.value = meta || null;
+  } catch { /* meta 获取失败不影响主流程 */ }
+
   // 已有 token 则尝试自动登录
   if (auth.token) {
     const ok = await checkAuth();

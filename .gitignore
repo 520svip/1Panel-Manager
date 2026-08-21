@@ -1,6 +1,7 @@
 node_modules/
 data/
 dist/
+logs/
 *.log
 .env
 # 本地开发测试目录（测试数据 / 测试脚本等，禁止上传）

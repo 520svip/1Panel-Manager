@@ -2,7 +2,7 @@
   <div>
     <div class="monitor-head">
       <div class="title">
-        <button class="btn btn-sm btn-ghost" @click="back">← 返回</button>
+        <button class="btn-back" @click="back"><span class="icon" v-html="icBack"></span>返回</button>
         <span>{{ currentMonitorName }}</span>
         <span class="badge" :class="monOnline ? 'online' : 'offline'">
           <span class="dot"></span>{{ monOnline ? '在线' : '离线' }}
@@ -51,6 +51,7 @@ import HomeTab from './dashboard/HomeTab.vue';
 import AppsTab from './dashboard/AppsTab.vue';
 import ContainersTab from './dashboard/ContainersTab.vue';
 import { monitorStore, panelsStore } from '@/stores';
+import icBack from '@/assets/icons/chevron-left.svg?raw';
 import {
   fetchMonitor, fetchApps, fetchContainerStats, fetchDockerStatus, fetchContainers, saveUiSettings,
 } from '@/stores/actions';

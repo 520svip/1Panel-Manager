@@ -30,7 +30,8 @@
     </div>
     <div class="field">
       <label>接口密钥（API Key）</label>
-      <input v-model="form.apiKey" placeholder="1Panel API Key" />
+      <input v-model="form.apiKey" :placeholder="editing ? '留空则保留原密钥' : '1Panel API Key'" />
+      <small v-if="editing" class="hint">{{ test ? '当前为演示环境，密钥以掩码形式展示（不可还原），直接保存不会修改原密钥；如需更换请填写新的完整密钥' : '留空或保留原值则密钥保持不变，如需更换请填写新的完整密钥' }}</small>
     </div>
     <div class="field">
       <label>分类</label>
@@ -57,6 +58,7 @@ defineProps({
   form: { type: Object, required: true },
   editing: { type: Boolean, default: false },
   categories: { type: Array, default: () => [] },
+  test: { type: Boolean, default: false },
 });
 defineEmits(['cancel', 'save']);
 </script>

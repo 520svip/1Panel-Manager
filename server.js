@@ -18,7 +18,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const DEFAULT_PASSWORD = process.env.DEFAULT_PASSWORD || 'admin123';
-const isDev = process.env.NODE_ENV !== 'production';
+const NODE_ENV = process.env.NODE_ENV || 'production';
+const isTest = NODE_ENV === 'test'; // 测试环境（演示用）
+// 开发模式 = development 或未设置；test 与 production 一样托管 dist/、监听对外端口
+const isDev = NODE_ENV !== 'production' && !isTest;
 const VITE_PORT = Number(process.env.VITE_PORT) || 3000;
 const BACKEND_PORT = Number(process.env.BACKEND_PORT) || 3001;
 
@@ -91,6 +94,38 @@ function normalizeEntry(entry) {
   return String(entry).trim();
 }
 
+// ---------- 测试环境（演示）数据脱敏 ----------
+// NODE_ENV=test 时仅对面板 API Key 打掩码（不可还原），
+// 其余字段（主机名、IP、环境变量、安装参数等）原样返回
+
+// 字符串掩码：保留首尾各 3 个字符，中间用 * 填充；过短则全部掩码
+function maskSecret(v) {
+  if (v == null || v === '') return v;
+  const s = String(v);
+  if (s.length <= 6) return '*'.repeat(s.length);
+  const keep = 3;
+  return s.slice(0, keep) + '*'.repeat(s.length - keep * 2) + s.slice(-keep);
+}
+
+// 面板 API Key：掩码展示，不可还原
+function maskPanelApiKey(panel) {
+  if (!isTest || !panel) return panel;
+  return { ...panel, api_key: maskSecret(panel.api_key) };
+}
+
+// ---------- 环境元信息（公开，无需登录） ----------
+// 供登录页等未登录场景使用；测试环境（演示）额外返回默认登录密码用于页面提示。
+app.get('/api/meta', (req, res) => {
+  res.json({
+    code: 200,
+    data: {
+      env: NODE_ENV,
+      test: isTest,
+      ...(isTest ? { defaultPassword: DEFAULT_PASSWORD } : {}),
+    },
+  });
+});
+
 // ---------- 鉴权 ----------
 app.post('/api/auth/login', (req, res) => {
   const { password } = req.body || {};
@@ -112,6 +147,10 @@ app.get('/api/auth/check', requireAuth, (req, res) => {
 
 // ---------- 修改密码 ----------
 app.post('/api/settings/password', requireAuth, (req, res) => {
+  // 测试环境为演示用途：保持默认密码恒定，禁止修改，否则登录页提示的密码会失效
+  if (isTest) {
+    return res.status(403).json({ code: 403, message: '当前为测试演示环境，不允许修改密码' });
+  }
   const { oldPassword, newPassword } = req.body || {};
   const stored = getSetting('password');
   if (!stored || !verifyPassword(oldPassword || '', stored)) {
@@ -155,7 +194,7 @@ app.post('/api/settings/ui', requireAuth, (req, res) => {
 
 // ---------- 面板 CRUD ----------
 app.get('/api/panels', requireAuth, (req, res) => {
-  res.json({ code: 200, data: listPanels() });
+  res.json({ code: 200, data: listPanels().map(maskPanelApiKey) });
 });
 
 app.post('/api/panels', requireAuth, (req, res) => {
@@ -174,7 +213,7 @@ app.post('/api/panels', requireAuth, (req, res) => {
     remark: p.remark || '',
     category: p.category || '',
   });
-  res.json({ code: 200, data: panel });
+  res.json({ code: 200, data: maskPanelApiKey(panel) });
 });
 
 app.put('/api/panels/:id', requireAuth, (req, res) => {
@@ -195,7 +234,7 @@ app.put('/api/panels/:id', requireAuth, (req, res) => {
     remark: p.remark || '',
     category: p.category || '',
   });
-  res.json({ code: 200, data: panel });
+  res.json({ code: 200, data: maskPanelApiKey(panel) });
 });
 
 app.delete('/api/panels/:id', requireAuth, (req, res) => {

@@ -146,6 +146,22 @@ a { color: var(--primary); text-decoration: none; }
 }
 .login-card h1 { font-size: 20px; text-align: center; margin: 0 0 4px; }
 .login-card p { text-align: center; color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+.login-hint {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+.login-hint p { margin: 2px 0; font-size: 12px; color: #9a3412; text-align: left; }
+.login-hint code {
+  background: #ffedd5;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c2410c;
+}
 
 /* ---------- 表单 ---------- */
 .field { margin-bottom: 14px; }
@@ -242,6 +258,38 @@ a { color: var(--primary); text-decoration: none; }
 /* ---------- 监控页 ---------- */
 .monitor-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .monitor-head .title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.monitor-head .title .btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: all .15s;
+}
+.monitor-head .title .btn-back:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, #fff);
+}
+.monitor-head .title .btn-back .icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: inherit;
+  transition: transform .15s;
+}
+.monitor-head .title .btn-back .icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+.monitor-head .title .btn-back:hover .icon { transform: translateX(-2px); }
 
 .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .controls .sep { width: 1px; height: 20px; background: var(--border); }
