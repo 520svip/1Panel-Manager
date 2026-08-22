@@ -109,8 +109,8 @@
           </div>
           <div class="action-row action-manage">
             <button class="btn btn-sm" :disabled="p._refreshing" @click="refreshPanel(p.id)">刷新</button>
-            <button class="btn btn-sm" @click="editPanel(p)">编辑</button>
-            <button class="btn btn-sm btn-danger" @click="deletePanel(p)">删除</button>
+            <button class="btn btn-sm" :disabled="appExpose?.isTest" @click="editPanel(p)">编辑</button>
+            <button class="btn btn-sm btn-danger" :disabled="appExpose?.isTest" @click="deletePanel(p)">删除</button>
           </div>
         </div>
       </div>

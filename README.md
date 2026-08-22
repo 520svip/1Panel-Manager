@@ -88,9 +88,9 @@ npm run build
 
 启动后访问：<http://localhost:3000>
 
-### PM2 部署（生产环境，多进程）
+### PM2 部署（生产环境，单进程）
 
-使用 PM2 以 cluster 模式启动 4 个 Node 实例，共享同一端口（默认 3000），日志输出到 `logs/` 目录（已加入 `.gitignore`，不会上传仓库）。
+使用 PM2 以 fork 模式启动单个 Node 实例，监听默认端口（3000），日志输出到 `logs/` 目录（已加入 `.gitignore`，不会上传仓库）。
 
 ```bash
 # 首次使用需全局安装 PM2
@@ -113,7 +113,7 @@ npm run pm2:monit       # 进程面板（CPU / 内存 / 请求数）
 > 说明：
 > - `ecosystem.config.js` 已根据当前 Node 版本自动判断是否需要 `--experimental-sqlite` 标志（22.5 ~ 22.12 需要，22.13+ 无需），无需手动配置。
 > - 所有环境变量（含 `NODE_ENV`）统一从 `.env` 读取，`ecosystem.config.js` 不再内置环境变量；`npm run dev` 会自动以 `NODE_ENV=development` 启动，生产模式（PM2 / `npm start`）使用 `.env` 中的 `production`。
-> - 4 个实例共享一个 SQLite 数据库（WAL 模式 + 5s 锁等待），写操作（登录、增删改面板等）并发安全。
+> - 单进程运行，会话存于进程内存（重启即失效，无需多进程共享）；SQLite 数据库使用 WAL 模式 + 5s 锁等待，写操作（登录、增删改面板等）并发安全。
 > - 生产模式必须构建 `dist/` 后启动（`NODE_ENV=production` 时 Express 直接托管 `dist/`）。
 
 ### 环境变量配置
@@ -141,6 +141,7 @@ npm run pm2:monit       # 进程面板（CPU / 内存 / 请求数）
 > - **API Key 掩码**：所有面板的接口密钥在接口返回时打掩码（如 `abc**********890`），**不可还原**，演示时不会泄露真实密钥。
 > - **默认密码提示**：登录页显示当前默认密码（`/api/meta` 返回），访客可直接登录体验。
 > - **禁止修改密码**：保持默认密码恒定，避免演示期间被改掉导致无法登录。
+> - **禁止修改面板**：前端「添加面板 / 编辑 / 删除」按钮置灰不可点，后端对应写接口（`POST / PUT / DELETE /api/panels`）直接返回 403，防止演示数据被污染。
 > - **防误写保护**：编辑面板时密钥输入框不会回填掩码值，留空保存即保留原密钥；后端在收到掩码形式的密钥时也会自动保留原值，防止掩码被误写回数据库。
 
 **默认后台密码：`admin123`**（仅当数据库首次初始化时生效，之后请在「设置」中修改）。
@@ -189,7 +190,7 @@ npm run pm2:monit       # 进程面板（CPU / 内存 / 请求数）
    - **搜索与筛选**：按名称 / 镜像 / ID 模糊搜索，按状态（全部 / 运行中 / 已停止 / 已暂停 / 已退出 / 删除中）筛选；均为前端即时过滤，切换无需重新请求
    - **容器操作**：单个或批量执行**启动 / 停止 / 重启 / 恢复 / 删除**；勾选左侧选择框（垂直居中）或点击卡片选中，批量栏显示已选数量；操作按钮在卡片底部整行右对齐
    - **镜像列表弹窗**：展示标签、大小、创建时间；正在使用的镜像显示「使用中」且禁止勾选，多选删除时自动跳过使用中镜像
-9. 右上角「设置」修改后台密码，「退出」销毁会话。
+9. 右上角「设置」修改后台密码，「退出」销毁会话；「GitHub」图标跳转项目仓库（<https://github.com/520svip/1Panel-Manager>）。
 
 ---
 
@@ -257,11 +258,11 @@ npm run pm2:monit       # 进程面板（CPU / 内存 / 请求数）
 │   ├── style.css             # 全局样式（由 Vite 打包）
 │   ├── App.vue               # 根组件（登录 / 顶栏）
 │   ├── assets/
-│   │   └── icons/            # 前端图标资源（SVG：menu / add / settings / logout / chevron-down）
+│   │   └── icons/            # 前端图标资源
 │   ├── router/               # vue-router（hash 路由，懒加载）
-│   ├── views/                # 页面视图（HomeView / DashboardView）
-│   │   └── dashboard/         # 管理面板各页签组件（HomeTab / AppsTab / ContainersTab）
-│   ├── components/           # 通用组件（Modal / Toast / LineChart / ProgressBar / PanelForm / SettingsModal / UninstallModal 等）
+│   ├── views/                # 页面视图
+│   │   └── dashboard/         # 管理面板各页签组件
+│   ├── components/           # 通用组件
 │   ├── stores/               # 轻量状态管理（reactive）+ 业务操作函数
 │   ├── api/                  # API 客户端封装
 │   └── utils/                # 格式化工具

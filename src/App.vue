@@ -33,10 +33,14 @@
         <span class="icon" v-html="icMenu"></span>
       </button>
       <div class="topbar-actions" :class="{ open: menuOpen }">
-        <button class="btn btn-primary" @click="openAddPanel">
+        <button class="btn btn-primary" :disabled="metaEnv?.test" @click="openAddPanel">
           <span class="icon" v-html="icAdd"></span>
           添加面板
         </button>
+        <a class="btn" href="https://github.com/520svip/1Panel-Manager" target="_blank" rel="noopener noreferrer" title="在 GitHub 上查看">
+          <span class="icon" v-html="icGithub"></span>
+          GitHub
+        </a>
         <button class="btn" @click="openSettings">
           <span class="icon" v-html="icSettings"></span>
           设置
@@ -95,6 +99,7 @@ import icMenu from '@/assets/icons/menu.svg?raw';
 import icAdd from '@/assets/icons/add.svg?raw';
 import icSettings from '@/assets/icons/settings.svg?raw';
 import icLogout from '@/assets/icons/logout.svg?raw';
+import icGithub from '@/assets/icons/github.svg?raw';
 
 const router = useRouter();
 
@@ -191,6 +196,6 @@ onMounted(async () => {
   }
 });
 
-// 暴露给子视图使用
-provide('appExpose', { openEditPanel, openPanel });
+// 暴露给子视图使用（reactive 包裹，使嵌套的 computed 在子组件模板中能正确解包）
+provide('appExpose', reactive({ openEditPanel, openPanel, isTest: computed(() => !!metaEnv.value?.test) }));
 </script>

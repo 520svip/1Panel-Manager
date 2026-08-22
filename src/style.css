@@ -77,6 +77,21 @@ a { color: var(--primary); text-decoration: none; }
   gap: 10px;
   flex-shrink: 0;
 }
+/* 右上角按钮内嵌图标：显式垂直居中，避免 SVG 沿文字基线偏移 */
+.topbar-actions .btn .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  line-height: 0;
+  flex-shrink: 0;
+}
+.topbar-actions .btn .icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 .hamburger {
   display: none;
   align-items: center;

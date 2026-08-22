@@ -193,11 +193,19 @@ app.post('/api/settings/ui', requireAuth, (req, res) => {
 });
 
 // ---------- 面板 CRUD ----------
+// 测试环境（演示）只读保护：禁止新增/修改/删除面板，防止演示数据被污染
+function denyInTest(req, res, next) {
+  if (isTest) {
+    return res.status(403).json({ code: 403, message: '当前为测试演示环境，不允许修改数据' });
+  }
+  next();
+}
+
 app.get('/api/panels', requireAuth, (req, res) => {
   res.json({ code: 200, data: listPanels().map(maskPanelApiKey) });
 });
 
-app.post('/api/panels', requireAuth, (req, res) => {
+app.post('/api/panels', requireAuth, denyInTest, (req, res) => {
   const p = req.body || {};
   if (!p.name || !p.host) {
     return res.status(400).json({ code: 400, message: '名称和主机地址不能为空' });
@@ -216,7 +224,7 @@ app.post('/api/panels', requireAuth, (req, res) => {
   res.json({ code: 200, data: maskPanelApiKey(panel) });
 });
 
-app.put('/api/panels/:id', requireAuth, (req, res) => {
+app.put('/api/panels/:id', requireAuth, denyInTest, (req, res) => {
   const id = Number(req.params.id);
   if (!getPanel(id)) return res.status(404).json({ code: 404, message: '面板不存在' });
   const p = req.body || {};
@@ -237,7 +245,7 @@ app.put('/api/panels/:id', requireAuth, (req, res) => {
   res.json({ code: 200, data: maskPanelApiKey(panel) });
 });
 
-app.delete('/api/panels/:id', requireAuth, (req, res) => {
+app.delete('/api/panels/:id', requireAuth, denyInTest, (req, res) => {
   deletePanel(Number(req.params.id));
   res.json({ code: 200, data: null });
 });
