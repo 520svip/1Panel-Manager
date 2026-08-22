@@ -134,7 +134,9 @@ import { getToken } from '@/api';
 
 const router = useRouter();
 const appExpose = inject('appExpose', null);
-const showFilters = ref(true);
+// 折叠状态持久化：无缓存默认展开；之前折叠则保持折叠
+const showFilters = ref(localStorage.getItem('home.showFilters') !== 'false');
+watch(showFilters, (v) => localStorage.setItem('home.showFilters', v ? 'true' : 'false'));
 
 const emptyList = computed(() => panelsStore.list.length === 0 && !panelsStore.loading);
 const categories = computed(() => {
@@ -208,3 +210,137 @@ onMounted(() => {
 });
 onUnmounted(stopListRefresh);
 </script>
+
+<style scoped>
+/* ---------- 列表工具栏 / 筛选 ---------- */
+.list-toolbar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.toolbar-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toolbar-actions { justify-content: flex-end; border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 2px; }
+
+.search-input {
+  flex: 1; min-width: 0;
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px;
+  font-size: 13px; background: #fbfcfe; color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+.search-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,130,246,.12); background: #fff; }
+
+.result-count {
+  font-size: 12px; color: var(--primary); background: #eff6ff;
+  padding: 3px 10px; border-radius: 999px; flex-shrink: 0;
+}
+.filter-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: #fff; color: var(--muted);
+  cursor: pointer; flex-shrink: 0;
+  transition: all .15s;
+}
+.filter-toggle:hover { color: var(--primary); border-color: var(--primary); }
+/* 内嵌图标显式居中，避免 SVG 沿文字基线偏移 */
+.filter-toggle .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  line-height: 0;
+  flex-shrink: 0;
+}
+.filter-toggle .icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transition: transform .2s;
+}
+.filter-toggle.open .icon :deep(svg) { transform: rotate(180deg); }
+.fade-slide-enter-active, .fade-slide-leave-active { transition: opacity .15s ease, transform .15s ease; }
+.fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateY(-6px); }
+
+.ctrl-label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.ctrl-label input[type="number"] { width: 56px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; }
+
+.filter-bar { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); }
+.filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filter-label { font-size: 12px; color: var(--muted); min-width: 32px; flex-shrink: 0; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: #fff; color: #3a4256; font-size: 12px; cursor: pointer; transition: all .15s;
+  white-space: nowrap;
+}
+.chip:hover { border-color: #cbd2df; }
+.chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.chip-online .dot { background: var(--green); }
+.chip-offline .dot { background: var(--red); }
+.chip.active .dot { background: #fff; }
+
+/* ---------- 面板卡片网格 ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+.panel-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform .15s, box-shadow .15s;
+}
+.panel-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.panel-card.offline { opacity: .75; }
+
+.card-head { display: flex; align-items: flex-start; gap: 10px; }
+.card-head .name { font-size: 16px; font-weight: 700; flex: 1; line-height: 1.3; }
+.card-head .name .addr { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; word-break: break-all; }
+
+.badge.version { background: #eef2ff; color: #4f46e5; }
+.badge.category { background: #f3e8ff; color: #7c3aed; }
+
+.occupancy { display: flex; flex-direction: column; gap: 8px; }
+.metric { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.metric .label { width: 30px; color: var(--muted); flex-shrink: 0; }
+.metric .val { width: 48px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+.card-actions { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.card-actions .action-row {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.card-actions .action-manage { grid-template-columns: 1fr 1fr 1fr; }
+.card-actions .action-row .btn { min-width: 0; padding: 6px 8px; justify-content: center; }
+.card-actions .action-row .btn:disabled { opacity: .5; }
+
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+  .card-actions .action-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card-actions .action-manage { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .toolbar-actions { justify-content: stretch; flex-wrap: wrap; }
+  .toolbar-actions .btn { margin-left: auto; }
+  .filter-label { min-width: 28px; }
+}
+@media (max-width: 420px) {
+  .list-toolbar { padding: 12px; }
+  .chip { padding: 5px 10px; font-size: 11.5px; }
+  .filter-group { gap: 6px; }
+}
+</style>

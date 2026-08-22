@@ -117,3 +117,73 @@ onMounted(() => {
 });
 onUnmounted(stopMonitorRefresh);
 </script>
+
+<style scoped>
+/* ---------- 监控页头部 ---------- */
+.monitor-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.monitor-head .title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.monitor-head .title .btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: all .15s;
+}
+.monitor-head .title .btn-back:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, #fff);
+}
+.monitor-head .title .btn-back .icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: inherit;
+  transition: transform .15s;
+}
+.monitor-head .title .btn-back .icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+.monitor-head .title .btn-back:hover .icon { transform: translateX(-2px); }
+
+.controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.controls label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.controls input[type="number"] {
+  width: 56px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px;
+}
+
+/* ---------- 页签导航 ---------- */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+.tab {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: all .15s;
+  font-family: inherit;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+</style>

@@ -166,3 +166,100 @@ const isV1Panel = computed(() => {
   return !!(p && p.version === 'v1');
 });
 </script>
+
+<style scoped>
+@import './shared.css';
+
+/* ---------- 应用卡片扩展 ---------- */
+.app-card.has-update {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, .12), var(--shadow);
+}
+.app-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.app-version { font-size: 12px; color: var(--muted); font-weight: 500; }
+.upgrade-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #f59e0b;
+  color: #fff;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .7; }
+}
+.app-meta-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.app-meta-text { font-size: 12px; color: var(--muted); }
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.app-icon {
+  width: 56px; height: 56px;
+  border-radius: 12px;
+  object-fit: contain;
+  flex-shrink: 0;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  padding: 4px;
+}
+.app-icon-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--primary);
+  background: #eef2ff;
+  line-height: 1;
+}
+.app-path {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+
+/* ---------- 应用升级弹窗 ---------- */
+.upgrade-current {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.upgrade-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fbfcfe;
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+.upgrade-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .12);
+  background: #fff;
+}
+
+@media (max-width: 640px) {
+  .app-icon { position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; border-radius: 8px; padding: 2px; }
+  .app-icon-placeholder { font-size: 16px; }
+  .app-name-row { padding-right: 54px; }
+  .app-path { max-width: 100%; }
+}
+</style>

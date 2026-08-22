@@ -207,3 +207,147 @@ function clearContainerSelection() {
   monitorStore.containerSelected = {};
 }
 </script>
+
+<style scoped>
+@import './shared.css';
+
+/* ---------- 批量操作栏 ---------- */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+}
+.batch-bar .count { color: #1d4ed8; font-weight: 600; }
+
+/* ---------- Docker 信息板块 ---------- */
+.docker-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+  border: 1px solid #e0e7ff;
+  border-radius: 14px;
+}
+.docker-info { display: flex; align-items: center; gap: 12px; }
+.docker-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: #e0e7ff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.docker-name-row { display: flex; align-items: center; gap: 8px; }
+.docker-name { font-size: 16px; font-weight: 700; }
+.docker-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.docker-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- 容器卡片 ---------- */
+.container-card { cursor: pointer; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.container-card:hover { border-color: #cbd2df; }
+.container-card.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, .18), var(--shadow);
+  background: #f5f9ff;
+}
+.container-check {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--primary);
+  align-self: center;
+}
+.container-main { flex: 1; min-width: 0; }
+.container-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+.container-image {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.container-status { font-size: 12px; color: var(--muted); }
+.container-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+  font-size: 12px;
+  color: var(--text);
+}
+.stat-item { font-weight: 600; }
+.container-actions {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.badge.warning { background: #fffbeb; color: #d97706; }
+.badge.warning .dot { background: var(--orange); }
+
+/* ---------- 镜像列表弹窗 ---------- */
+.image-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.image-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.image-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.image-row.selected {
+  border-color: var(--primary);
+  background: #f5f9ff;
+}
+.image-row.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--bg-muted, #f5f5f5);
+}
+.image-info { flex: 1; min-width: 0; }
+.image-tags {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.used-tag { color: #16a34a; font-weight: 600; }
+
+@media (max-width: 640px) {
+  .app-card.container-card { display: flex; align-items: center; flex-wrap: wrap; }
+}
+</style>

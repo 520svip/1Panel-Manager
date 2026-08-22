@@ -128,3 +128,43 @@ const netValues = computed(() => combineSeries(series.value.network?.up, series.
 const diskIoCur = computed(() => { const x = lastOf(diskIoValues.value); return x != null ? x : 0; });
 const netCur = computed(() => { const x = lastOf(netValues.value); return x != null ? x : 0; });
 </script>
+
+<style scoped>
+.section-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: #3a4256; }
+
+/* 概况 / 实时指标 */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+}
+.stat-card .k { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.stat-card .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-card .s { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* 历史趋势 */
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.chart-card .cc-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.chart-card .cc-head .t { font-size: 13px; font-weight: 600; color: #3a4256; }
+.chart-card .cc-head .cur { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chart-card .cc-head .cur small { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+/* 主机信息 */
+.host-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.host-item { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+.host-item .hk { font-size: 12px; color: var(--muted); }
+.host-item .hv { font-size: 13px; font-weight: 600; word-break: break-all; }
+
+/* 磁盘 */
+.disk-list { display: flex; flex-direction: column; gap: 10px; }
+.disk-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.disk-item .path { width: 110px; flex-shrink: 0; word-break: break-all; }
+.disk-item .bar { flex: 1; height: 9px; background: #eef0f5; border-radius: 999px; overflow: hidden; }
+.disk-item .bar > span { display: block; height: 100%; border-radius: 999px; }
+.disk-item .info { width: 150px; text-align: right; color: var(--muted); font-size: 12px; flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  .disk-item { flex-wrap: wrap; }
+  .disk-item .info { width: 100%; text-align: left; }
+}
+</style>

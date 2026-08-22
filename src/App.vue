@@ -199,3 +199,164 @@ onMounted(async () => {
 // 暴露给子视图使用（reactive 包裹，使嵌套的 computed 在子组件模板中能正确解包）
 provide('appExpose', reactive({ openEditPanel, openPanel, isTest: computed(() => !!metaEnv.value?.test) }));
 </script>
+
+<style scoped>
+/* ---------- 应用外壳布局 ---------- */
+.app-shell { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.topbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-right: auto;
+  line-height: 1.2;
+}
+.brand .logo {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #3b82f6, #7c3aed);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 17px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(59, 130, 246, .22);
+}
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.brand-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+.brand small {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+/* 右上角按钮内嵌图标：显式垂直居中，避免 SVG 沿文字基线偏移 */
+.topbar-actions .btn .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  line-height: 0;
+  flex-shrink: 0;
+}
+.topbar-actions .btn .icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px; height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  transition: all .15s;
+}
+.hamburger:active { transform: scale(.94); }
+.hamburger.active { background: #f1f5f9; }
+
+/* ---------- 登录 ---------- */
+.login-wrap {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  background: linear-gradient(160deg, #eef2ff 0%, #f4f6fb 40%, #fdf2f8 100%);
+}
+.login-card {
+  width: 100%; max-width: 380px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 36px 32px;
+  box-shadow: var(--shadow-lg);
+}
+.login-card .logo-lg {
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #3b82f6, #7c3aed);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 20px;
+  margin: 0 auto 16px;
+}
+.login-card h1 { font-size: 20px; text-align: center; margin: 0 0 4px; }
+.login-card p { text-align: center; color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+.login-hint {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+.login-hint p { margin: 2px 0; font-size: 12px; color: #9a3412; text-align: left; }
+.login-hint code {
+  background: #ffedd5;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c2410c;
+}
+
+@media (max-width: 640px) {
+  .topbar { position: relative; }
+  .topbar .brand { gap: 10px; }
+  .brand .logo { width: 38px; height: 38px; font-size: 17px; border-radius: 10px; }
+  .brand-title { font-size: 17px; }
+  .brand small { display: none; }
+  /* 汉堡菜单：logo 与汉堡同行，三个按钮收进下拉 */
+  .hamburger { display: inline-flex; margin-left: auto; }
+  .topbar-actions {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 30;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 180px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+  }
+  .topbar-actions.open {
+    display: flex;
+    animation: menu-in .16s ease;
+  }
+  .topbar-actions .btn { width: 100%; justify-content: center; }
+}
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
